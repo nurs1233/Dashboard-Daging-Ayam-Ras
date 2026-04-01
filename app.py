@@ -96,23 +96,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- FUNGSI PEMUATAN DATA (MENGGANTIKAN DATA_LOADER.PY) ---
+# --- FUNGSI PEMUATAN DATA CERDAS ---
 @st.cache_data
 def load_all_data():
-    """
-    Mencari seluruh file CSV/XLSX di dalam root aplikasi dan sub-foldernya.
-    Logika unpivoting (melt) dan pembersihan disertakan di sini.
-    """
     base_search_path = "."
+    files = []
     
     # 1. Cari semua file CSV dan XLSX
-    files = []
     for root, dirs, filenames in os.walk(base_search_path):
-        # Abaikan folder sistem untuk mempercepat proses
         if '/.' in root or '\\.' in root or 'venv' in root or '__pycache__' in root:
             continue
         for f in filenames:
-            if f.endswith('.csv') or f.endswith('.xlsx'):
+            if f.endswith('.csv') or (f.endswith('.xlsx') and not f.startswith('~$')):
                 files.append(os.path.join(root, f))
     
     if not files:
@@ -121,57 +116,66 @@ def load_all_data():
     all_data = []
     for file in files:
         try:
-            # Skip 3 baris metadata
+            # Baca tanpa header untuk mendeteksi baris tabel yang sebenarnya
             if file.endswith('.csv'):
-                df = pd.read_csv(file, skiprows=3)
+                df_raw = pd.read_csv(file, header=None, dtype=str)
             else:
-                df = pd.read_excel(file, skiprows=3)
-        except Exception:
-            continue
-
-        if df.empty:
-            continue
-
-        # Deteksi kolom 'Wilayah'
-        if 'Wilayah' not in df.columns:
-            wilayah_col = [c for c in df.columns if 'wilayah' in str(c).lower()]
-            if wilayah_col:
-                df = df.rename(columns={wilayah_col[0]: 'Wilayah'})
-            else:
+                df_raw = pd.read_excel(file, header=None, dtype=str)
+                
+            # Cari baris yang mengandung kata 'Wilayah'
+            header_idx = -1
+            for i, row in df_raw.iterrows():
+                row_str = " ".join([str(val).lower() for val in row.values])
+                if 'wilayah' in row_str:
+                    header_idx = i
+                    break
+                    
+            if header_idx == -1:
                 continue
-
-        # Cleansing baris non-data ("Sumber Data : SP2KP...")
-        df = df.dropna(subset=['Wilayah'])
-        df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data', case=False, na=False)]
-        
-        # Melt data: Wide (tanggal di kolom) -> Long (tanggal jadi baris)
-        date_columns = [col for col in df.columns if col != 'Wilayah' and not str(col).startswith('Unnamed')]
-        df_melted = pd.melt(
-            df, id_vars=['Wilayah'], value_vars=date_columns, 
-            var_name='Tanggal', value_name='Harga'
-        )
-
-        # Standardisasi data
-        df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
-        if df_melted['Harga'].dtype == 'object':
-            df_melted['Harga'] = df_melted['Harga'].astype(str).str.replace(',', '').str.replace('.', '')
+                
+            # Jadikan baris tersebut sebagai nama kolom
+            df_raw.columns = df_raw.iloc[header_idx]
+            df = df_raw.iloc[header_idx + 1:].copy()
             
-        df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
-        df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
+            # Standarisasi nama kolom Wilayah
+            wilayah_col = [c for c in df.columns if 'wilayah' in str(c).lower()][0]
+            df = df.rename(columns={wilayah_col: 'Wilayah'})
+            
+            # Cleansing baris non-data ("Sumber Data : SP2KP...")
+            df = df.dropna(subset=['Wilayah'])
+            df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data', case=False, na=False)]
+            
+            # Melt data: Wide (tanggal di kolom) -> Long (tanggal jadi baris)
+            date_columns = [col for col in df.columns if col != 'Wilayah' and pd.notna(col) and str(col).strip() != '']
+            df_melted = pd.melt(
+                df, id_vars=['Wilayah'], value_vars=date_columns, 
+                var_name='Tanggal', value_name='Harga'
+            )
 
-        # Buang baris invalid & harga 0
-        df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
-        df_melted = df_melted[df_melted['Harga'] > 0]
-        
-        if not df_melted.empty:
-            all_data.append(df_melted)
+            # Standardisasi Tipe Data
+            df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
+            
+            # Pembersihan format angka (hanya menyisakan angka)
+            df_melted['Harga'] = df_melted['Harga'].astype(str).str.replace(r'[^\d]', '', regex=True)
+            df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
+            df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
+
+            # Buang baris invalid & harga 0
+            df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
+            df_melted = df_melted[df_melted['Harga'] > 0]
+            
+            if not df_melted.empty:
+                all_data.append(df_melted)
+                
+        except Exception as e:
+            continue
 
     if not all_data:
-        raise ValueError("File ditemukan, tapi tidak ada data yang valid untuk dibaca (Mungkin format kolom berbeda).")
+        raise ValueError("File ditemukan, tapi tidak ada data yang berhasil dikonversi. Pastikan format tabel sesuai.")
 
     combined_df = pd.concat(all_data, ignore_index=True)
     
-    # Injeksi kolom Lat/Lon kosong untuk mencegah error Peta di bawah
+    # Injeksi kolom Lat/Lon kosong untuk mencegah error Peta
     if 'Lat' not in combined_df.columns:
         combined_df['Lat'] = None
     if 'Lon' not in combined_df.columns:
@@ -197,7 +201,6 @@ with st.sidebar:
     max_d = df_full['Tanggal'].max().date()
     min_d = df_full['Tanggal'].min().date()
     
-    # Pencegahan jika min dan max date sama
     if max_d == min_d:
         default_start = min_d
     else:
