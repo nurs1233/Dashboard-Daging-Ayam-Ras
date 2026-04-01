@@ -61,18 +61,25 @@ header[data-testid="stHeader"] { display: none !important; }
 .desc-text { font-size: 13px; color: var(--textsoft); margin-bottom: 1rem; line-height: 1.5; }
 .guide-box { background: rgba(96,165,250,0.05); border-left: 4px solid #60A5FA; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 13px; line-height: 1.6;}
 .guide-box strong { color: #60A5FA; }
+.guide-box ul { margin-top: 4px; margin-bottom: 4px; padding-left: 20px; }
 .interpreter-box { background: rgba(61,214,140,0.05); border-left: 4px solid #3DD68C; padding: 1rem; border-radius: 8px; margin-top: 1rem; font-size: 13.5px; line-height: 1.6;}
 .interpreter-box strong { color: #3DD68C; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# KONFIGURASI EVENT TETAP (HARDCODED UNTUK STABILITAS TANPA DEPENDENSI EXTRA)
+# KONFIGURASI EVENT TETAP & DINAMIS (HARDCODED EST)
 # ─────────────────────────────────────────────────────────────────────────────
 EVENT_DATES = {
     'Awal Ramadan': {2023: '2023-03-23', 2024: '2024-03-12', 2025: '2025-03-01', 2026: '2026-02-18', 2027: '2027-02-08'},
     'Idul Fitri': {2023: '2023-04-22', 2024: '2024-04-10', 2025: '2025-03-31', 2026: '2026-03-20', 2027: '2027-03-10'},
     'Idul Adha': {2023: '2023-06-29', 2024: '2024-06-17', 2025: '2025-06-06', 2026: '2026-05-27', 2027: '2027-05-17'},
+    'Tahun Baru Imlek': {2023: '2023-01-22', 2024: '2024-02-10', 2025: '2025-01-29', 2026: '2026-02-17', 2027: '2027-02-06'},
+    'Hari Raya Nyepi': {2023: '2023-03-22', 2024: '2024-03-11', 2025: '2025-03-29', 2026: '2026-03-19', 2027: '2027-03-09'},
+    'Hari Raya Waisak': {2023: '2023-06-04', 2024: '2024-05-23', 2025: '2025-05-12', 2026: '2026-05-31', 2027: '2027-05-20'},
+    'Maulid Nabi': {2023: '2023-09-28', 2024: '2024-09-16', 2025: '2025-09-05', 2026: '2026-08-26', 2027: '2027-08-15'},
+    'HUT RI': {2023: '2023-08-17', 2024: '2024-08-17', 2025: '2025-08-17', 2026: '2026-08-17', 2027: '2027-08-17'},
+    'Hari Buruh': {2023: '2023-05-01', 2024: '2024-05-01', 2025: '2025-05-01', 2026: '2026-05-01', 2027: '2027-05-01'},
     'Natal': {2023: '2023-12-25', 2024: '2024-12-25', 2025: '2025-12-25', 2026: '2026-12-25', 2027: '2027-12-25'},
     'Tahun Baru': {2023: '2023-01-01', 2024: '2024-01-01', 2025: '2025-01-01', 2026: '2026-01-01', 2027: '2027-01-01'}
 }
@@ -121,10 +128,9 @@ def calc_half_life(series):
     y_lag = y[:-1]
     try:
         slope, _ = np.polyfit(y_lag, dy, 1)
-        # Jika slope positif atau 0, deret tidak kembali ke rata-rata (explosive/random walk)
         if slope >= 0: return np.inf 
         hl = -np.log(2) / slope
-        return hl if hl < 365 else np.inf # Batasi maksimal 1 tahun secara logis
+        return hl if hl < 365 else np.inf
     except:
         return np.nan
 
@@ -205,11 +211,11 @@ with col3:
     if compare_mode == "Per Provinsi":
         all_regions = sorted(df_full['Wilayah'].unique())
         default_regs = [r for r in ['DKI Jakarta', 'Jawa Barat', 'Jawa Timur', 'Sumatera Utara'] if r in all_regions]
-        selected_regs = st.multiselect("🌏 Pilih Provinsi untuk Dianalisis", all_regions, default=default_regs)
+        selected_regs = st.multiselect("🌏 Pilih Provinsi", all_regions, default=default_regs)
     else:
         all_islands = sorted(df_full['Pulau'].unique())
         all_islands = [i for i in all_islands if i != 'Lainnya']
-        selected_regs = st.multiselect("🏝️ Pilih Pulau untuk Dianalisis", all_islands, default=all_islands)
+        selected_regs = st.multiselect("🏝️ Pilih Pulau", all_islands, default=all_islands)
 
 # Persiapan Data Scope Berdasarkan Pilihan
 plot_data = {}
@@ -259,7 +265,7 @@ tab_utama, tab_disparitas, tab_dekomposisi, tab_volatilitas, tab_klaster, tab_an
     "12️⃣ Spasial",
     "🧠 Entropi",
     "⏳ Mean Reversion",
-    "📅 Pra-Event"
+    "📅 Efek Event"
 ])
 
 # =============================================================================
@@ -267,7 +273,16 @@ tab_utama, tab_disparitas, tab_dekomposisi, tab_volatilitas, tab_klaster, tab_an
 # =============================================================================
 with tab_utama:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Memantau pergerakan, membandingkan tren antar wilayah, dan melihat posisi relatif suatu wilayah terhadap rata-rata Nasional.</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Memantau pergerakan harga dasar (<i>baseline</i>), membandingkan tren antar wilayah, dan melihat posisi relatif suatu wilayah terhadap rata-rata Nasional.<br>
+        <strong>Metode:</strong> Visualisasi <i>Time-Series</i> komparatif dengan overlay agregat nasional (rata-rata selurus wilayah).<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li>Garis hijau dengan arsiran adalah rata-rata Nasional.</li>
+            <li>Garis warna-warni mewakili entitas (Provinsi/Pulau) yang Anda pilih.</li>
+            <li>Jika garis suatu wilayah berada secara konsisten di atas area hijau, wilayah tersebut memiliki struktur biaya/harga yang secara permanen lebih mahal dari kewajaran nasional.</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     fig1 = go.Figure()
@@ -287,7 +302,6 @@ with tab_utama:
     fig1.update_yaxes(range=[y_min_total - padding if y_min_total > 0 else 0, y_max_total + padding])
     st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
     
-    # INTERPRETER OTOMATIS
     if plot_data:
         latest_prices = {k: v.iloc[-1] for k, v in plot_data.items()}
         max_ent = max(latest_prices, key=latest_prices.get)
@@ -300,7 +314,16 @@ with tab_utama:
 # =============================================================================
 with tab_disparitas:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Menilai seberapa merata harga di berbagai wilayah menggunakan Gap Harga dan Indeks Gini. Ketimpangan tinggi menandakan kendala distribusi.</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Menilai seberapa merata atau timpangnya harga antar lokasi. Ketimpangan tinggi menandakan kendala distribusi logistik atau adanya hambatan isolasi pasar.<br>
+        <strong>Metode:</strong> Kalkulasi <i>Price Gap</i> (Nilai Maksimum - Nilai Minimum) harian, dan <i>Gini Ratio</i> (mengukur distribusi ketidakmerataan).<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li><b>Grafik Area Kuning:</b> Selisih harga mutlak (dalam Rupiah). Jika membesar, berarti kesenjangan makin parah.</li>
+            <li><b>Grafik Bar Ungu (Gini):</b> Nilai 0 berarti harga sama rata di semua tempat. Mendekati 1 berarti timpang.</li>
+            <li>Nilai Gini > 0.3 biasanya menjadi peringatan dini bahwa intervensi operasi pasar lintas batas diperlukan.</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     if not df_scope.empty and len(selected_regs) >= 2:
@@ -318,22 +341,21 @@ with tab_disparitas:
             fig_disp = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.65,0.35], vertical_spacing=0.06)
             fig_disp.add_trace(go.Scatter(x=disp_daily['Tanggal'], y=disp_daily['Gap'], name='Gap (Max-Min)', fill='tozeroy', fillcolor='rgba(240, 180, 41, 0.1)', line=dict(color='#F0B429', width=2), hovertemplate='Rp %{y:,.0f}<extra></extra>'), row=1, col=1)
             fig_disp.add_trace(go.Bar(x=gini_daily['Tanggal'], y=gini_daily['Harga'], name='Gini', marker_color='rgba(167,139,250,0.6)', hovertemplate='%{y:.4f}<extra></extra>'), row=2, col=1)
-            fig_disp = apply_beautiful_layout(fig_disp, f"Tren Disparitas (Spesifik Terpilih)")
+            fig_disp = apply_beautiful_layout(fig_disp, f"Tren Disparitas (Wilayah Terpilih)")
             fig_disp.update_layout(height=400, showlegend=False, yaxis=dict(title="Gap (Rp)"), yaxis2=dict(title="Gini"))
             st.plotly_chart(fig_disp, use_container_width=True, config={'displayModeBar': False})
             
         with col_d2:
-            st.markdown("#### Peringkat Harga Hari Terakhir")
+            st.markdown("#### Peringkat Harga Terbaru")
             df_scope_latest = df_scope[df_scope['Tanggal'] == df_scope['Tanggal'].max()].sort_values('Harga', ascending=True)
             fig_bar = px.bar(df_scope_latest, x='Harga', y=entity_col, orientation='h', color='Harga', color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'], text='Harga')
             fig_bar.update_traces(texttemplate='Rp %{text:,.0f}', textposition='outside', marker_line_width=0)
             fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=400, coloraxis_showscale=False, yaxis=dict(title="", tickfont=dict(size=11, color='#9BAABD')), xaxis=dict(showticklabels=False, showgrid=False, title=""), margin=dict(l=0,r=0,t=0,b=0))
             st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
             
-        # INTERPRETER OTOMATIS
         latest_gap = disp_daily.iloc[-1]['Gap']
         latest_gini = gini_daily.iloc[-1]['Harga']
-        gini_status = "relatif merata" if latest_gini < 0.1 else "moderat" if latest_gini < 0.2 else "sangat timpang"
+        gini_status = "Relatif Merata" if latest_gini < 0.1 else "Moderat" if latest_gini < 0.2 else "Sangat Timpang"
         st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> Kesenjangan (gap) harga hari ini antara wilayah termahal dan termurah mencapai <b>Rp {latest_gap:,.0f}</b>. Indeks Gini sebesar <b>{latest_gini:.3f}</b> menandakan bahwa distribusi harga di pasar-pasar terpilih ini tergolong <b>{gini_status}</b>.</div>""", unsafe_allow_html=True)
     else: st.info(f"Pilih minimal 2 {compare_mode.split(' ')[1].lower()} untuk menghitung disparitas.")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -343,7 +365,16 @@ with tab_disparitas:
 # =============================================================================
 with tab_dekomposisi:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Mengungkap tren mendasar tanpa gangguan fluktuasi harian, serta mendeteksi adanya siklus (musiman) pada komoditas.</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Mengungkap struktur dasar atau "anatomi" dari sebuah data deret waktu harga daging ayam.<br>
+        <strong>Metode:</strong> <i>Seasonal Decomposition of Time Series</i> menggunakan model <i>Multiplicative</i> pada data rata-rata mingguan.<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li><b>Trend (Fundamental):</b> Garis yang menunjukkan arah jangka panjang murni, tanpa gangguan musim atau noise harian.</li>
+            <li><b>Musiman (Seasonal):</b> Pola bukit-lembah berulang secara konsisten. Membantu melihat siklus harga mahal/murah rutin.</li>
+            <li><b>Residual (Acak):</b> Bar grafik yang menunjukkan faktor 'kejutan' tak terduga yang tidak bisa dijelaskan oleh trend/musim (contoh: panic buying, bencana).</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     if HAS_STATSMODELS:
@@ -366,10 +397,9 @@ with tab_dekomposisi:
             fig_decomp.update_yaxes(showgrid=True, gridcolor='#2A3142')
             st.plotly_chart(fig_decomp, use_container_width=True, config={'displayModeBar': False})
             
-            # INTERPRETER
-            trend_diff = result.trend.iloc[-2] - result.trend.dropna().iloc[0]
-            trend_dir = "mengalami tren Kenaikan (Inflasi)" if trend_diff > 0 else "mengalami tren Penurunan (Deflasi)"
-            st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> Secara fundamental jangka panjang (mengabaikan noise harian), <b>{target_decomp}</b> saat ini secara keseluruhan <b>{trend_dir}</b>. Jika grafik bar Residual (merah) tiba-tiba meninggi, ini menandakan adanya <i>market shock</i> acak di bulan tersebut yang di luar kebiasaan musimannya.</div>""", unsafe_allow_html=True)
+            trend_s = result.trend.dropna()
+            trend_dir = "mengalami tren Kenaikan" if trend_s.iloc[-1] > trend_s.iloc[0] else "mengalami tren Penurunan"
+            st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> Secara fundamental jangka panjang (mengabaikan noise harian), <b>{target_decomp}</b> saat ini secara keseluruhan <b>{trend_dir}</b>. Jika grafik bar Residual (merah) di bawah tiba-tiba memanjang drastis di periode tertentu, itu menandakan terjadinya <i>market shock</i> (kejutan eksternal).</div>""", unsafe_allow_html=True)
         else: st.warning("Data tidak cukup panjang untuk dekomposisi. Pilih rentang waktu yang lebih lama.")
     else: st.error("Library `statsmodels` tidak terinstal.")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -379,7 +409,16 @@ with tab_dekomposisi:
 # =============================================================================
 with tab_volatilitas:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Mengukur risiko (<i>RiskMetrics</i>) akibat fluktuasi harga yang berubah-ubah secara ekstrem. Semakin tinggi persentasenya, semakin bergejolak pasar tersebut.</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Mengukur risiko fluktuasi harga harian yang disetahunkan (Annualized Volatility). Penting untuk menilai stabilitas dan kepastian pasar bagi peternak/pedagang.<br>
+        <strong>Metode:</strong> Estimasi berbasis <i>Exponentially Weighted Moving Average (EWMA)</i> dari Log Return harga (sebagai proksi untuk varians bersyarat GARCH/RiskMetrics).<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li>Garis chart (kiri) melacak dinamika kepanikan/ketenangan pasar dari hari ke hari.</li>
+            <li>Bar chart (kanan) mengurutkan rata-rata volatilitas secara agregat (<i>Coefficient of Variation</i>).</li>
+            <li>Volatilitas yang menanjak naik berarti pasar sangat fluktuatif dan berisiko tinggi. Semakin kecil angkanya, pasar semakin aman dan pasti.</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     col_v1, col_v2 = st.columns([2, 1])
@@ -397,7 +436,7 @@ with tab_volatilitas:
             latest_vols[name] = vol.iloc[-1]
             fig_vol.add_trace(go.Scatter(x=vol.index, y=vol.values, name=name, line=dict(color=PALETTE[i%len(PALETTE)], width=1.5), hovertemplate=f'<b>{name}</b><br>Volatilitas: %{{y:.2f}}%<extra></extra>'))
         
-        fig_vol = apply_beautiful_layout(fig_vol, "Tingkat Volatilitas (Annualized %)")
+        fig_vol = apply_beautiful_layout(fig_vol, "Tingkat Volatilitas Dinamis (Annualized %)")
         fig_vol.update_layout(height=400, yaxis=dict(title="Tingkat Gejolak (%)", ticksuffix="%"))
         st.plotly_chart(fig_vol, use_container_width=True, config={'displayModeBar': False})
         
@@ -408,12 +447,12 @@ with tab_volatilitas:
             vol_data = vol_data.sort_values('CV', ascending=True)
             fig_cv = px.bar(vol_data, x='CV', y=entity_col, orientation='h', color='CV', color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'], text='CV')
             fig_cv.update_traces(texttemplate='%{text:.1f}%', textposition='outside', marker_line_width=0)
-            fig_cv.update_layout(title=dict(text="Peringkat Volatilitas Keseluruhan (CV)", font=dict(size=14, color='#E6EDF3')), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=400, coloraxis_showscale=False, yaxis=dict(title="", tickfont=dict(size=11, color='#9BAABD')), xaxis=dict(showticklabels=False, showgrid=False, title=""), margin=dict(l=0,r=0,t=40,b=0))
+            fig_cv.update_layout(title=dict(text="Peringkat Agregat (CV)", font=dict(size=14, color='#E6EDF3')), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=400, coloraxis_showscale=False, yaxis=dict(title="", tickfont=dict(size=11, color='#9BAABD')), xaxis=dict(showticklabels=False, showgrid=False, title=""), margin=dict(l=0,r=0,t=40,b=0))
             st.plotly_chart(fig_cv, use_container_width=True, config={'displayModeBar': False})
     
     if latest_vols:
         max_vol_name = max(latest_vols, key=latest_vols.get)
-        st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> Secara dinamis pada data teraktual, <b>{max_vol_name}</b> adalah wilayah dengan gejolak risiko tertinggi ({latest_vols[max_vol_name]:.2f}%). Pelaku pasar di wilayah ini dihadapkan pada ketidakpastian harga harian yang paling ekstrem dibandingkan wilayah lainnya.</div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> Secara dinamis pada data teraktual, <b>{max_vol_name}</b> adalah wilayah dengan gejolak risiko tertinggi ({latest_vols[max_vol_name]:.2f}%). Harga di wilayah ini berubah-ubah secara liar sehingga mendatangkan risiko kerugian atau spekulasi yang lebih tinggi dibanding area lain.</div>""", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
@@ -421,7 +460,16 @@ with tab_volatilitas:
 # =============================================================================
 with tab_klaster:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Mencari daerah-daerah yang memiliki karakter pasar serupa atau terhubung erat dalam rantai pasok (berdasarkan <b>POLA</b>, bukan angka mutlaknya).</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Mengelompokkan daerah berdasarkan kemiripan pola pergerakan harganya. Berguna untuk efisiensi kebijakan operasi pasar dan distribusi logistik.<br>
+        <strong>Metode:</strong> Algoritma <i>Machine Learning Unsupervised (K-Means Clustering)</i> pada data yang telah distandardisasi (Z-Score) agar fokus pada "Bentuk Pola", bukan pada nominal harga yang besar/kecil.<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li>Algoritma mencari entitas mana saja yang senasib dan sepola, lalu memecahnya menjadi grup-grup.</li>
+            <li>Entitas yang Anda pilih akan disorot <b>tebal</b> di daftar sebelah kanan.</li>
+            <li>Jika 2 provinsi masuk di Klaster yang sama, maka jika provinsi A harga naik, kemungkinan besar provinsi B polanya juga merespon hal serupa karena pasokan mereka saling terhubung.</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     if HAS_SKLEARN:
@@ -449,7 +497,7 @@ with tab_klaster:
                     name_label = f"Cluster {c+1} ({len(members)} Anggota)"
                     fig_km.add_trace(go.Scatter(x=cluster_avg_price.index, y=cluster_avg_price.values, name=name_label, line=dict(color=cluster_colors[c], width=3), hovertemplate=f"<b>{name_label}</b><br>Rp %{{y:,.0f}}<extra></extra>"))
                 
-                fig_km = apply_beautiful_layout(fig_km, f"Rata-rata Harga Aktual per Klaster (K-Means)")
+                fig_km = apply_beautiful_layout(fig_km, f"Rata-rata Harga Aktual per Klaster (AI K-Means)")
                 fig_km.update_layout(height=400)
                 st.plotly_chart(fig_km, use_container_width=True, config={'displayModeBar': False})
             
@@ -462,10 +510,9 @@ with tab_klaster:
                     st.markdown(", ".join(formatted_members), unsafe_allow_html=True)
                     st.markdown("<hr style='margin:0.5rem 0; border-color:#2A3142;'>", unsafe_allow_html=True)
             
-            # INTERPRETER
             c_counts = cluster_map['Cluster'].value_counts()
             largest_c = c_counts.idxmax()
-            st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> Algoritma berhasil memetakan pasar menjadi <b>{n_clusters} Klaster</b> pola harga. Mayoritas entitas ({c_counts[largest_c]} daerah) masuk ke dalam <b>Cluster {largest_c + 1}</b>, menandakan bahwa inilah "pola dominan" rantai pasok ayam ras saat ini. Entitas di klaster yang sama sangat mungkin memiliki kesamaan struktur pasokan atau merespon <i>event</i> dengan cara yang identik.</div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> AI mengelompokkan karakteristik pasar menjadi <b>{n_clusters} Klaster</b> pola perilaku. Mayoritas entitas ({c_counts[largest_c]} entitas) tergabung dalam <b>Cluster {largest_c + 1}</b>, menjadikannya standar perilaku harga dominan di RI saat ini. Entitas yang berbeda klaster berarti memiliki fundamental penggerak harga (struktur rantai pasok) yang terisolasi atau independen satu sama lain.</div>""", unsafe_allow_html=True)
         else: st.warning("Data entitas tidak cukup untuk membentuk klaster.")
     else: st.error("Library `scikit-learn` tidak terinstal.")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -475,7 +522,15 @@ with tab_klaster:
 # =============================================================================
 with tab_anomali:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Mendeteksi lonjakan (spikes) atau kejatuhan harga ekstrem yang menyimpang di luar kewajaran statistik (Rolling Z-Score > 2.5). Berguna untuk mendeteksi *market shock* atau manipulasi stok.</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Mendeteksi titik-titik harga harian yang menyimpang di luar kewajaran. Sangat relevan untuk investigasi spekulasi, gangguan distribusi mendadak, atau keberhasilan intervensi OP (Operasi Pasar).<br>
+        <strong>Metode:</strong> Statistik <i>Rolling Z-Score</i>. Harga dinyatakan anomali jika deviasinya melebihi 2.5 kali Standar Deviasi dari pergerakan normal 30 hari ke belakang.<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li>Garis menunjukkan pergerakan harga normal. Tanda <b>titik X atau bulatan padat</b> menunjukkan tanggal terjadinya Anomali Harga.</li>
+            <li>Jika banyak tanda anomali bertumpuk, ini menunjukkan pasar sedang dilanda kepanikan irasional atau <i>market failure</i> yang kuat.</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     if not plot_data: st.info("Pilih wilayah/pulau terlebih dahulu.")
@@ -497,14 +552,14 @@ with tab_anomali:
                 fig_anom.add_trace(go.Scatter(x=anomalies.index, y=anomalies.values, mode='markers', name=f'Anomali {name}', marker=dict(color='#F87171', size=10, symbol='circle', line=dict(width=2, color=line_color)), hovertemplate=f'<b>ANOMALI: {name}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'))
                 anom_counts[name] = len(anomalies)
         
-        fig_anom = apply_beautiful_layout(fig_anom, f"Visualisasi Serentak Anomali Harga Ekstrem")
+        fig_anom = apply_beautiful_layout(fig_anom, f"Pemantauan Anomali (Spike) Harga")
         fig_anom.update_layout(height=450)
         st.plotly_chart(fig_anom, use_container_width=True, config={'displayModeBar': False})
         
         if anom_counts:
             max_anom = max(anom_counts, key=anom_counts.get)
-            st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> Terdeteksi adanya anomali harga pada pasar terpilih. Wilayah yang paling rentan terhadap kejadian ekstrem (<i>shock</i>) selama periode ini adalah <b>{max_anom}</b> dengan total <b>{anom_counts[max_anom]} kejadian harga tak wajar</b>. Ini bisa diakibatkan oleh interupsi pasokan dadakan atau aksi spekulan.</div>""", unsafe_allow_html=True)
-        else: st.success("✅ Seluruh wilayah/pulau terpilih bergerak normal sesuai batas kewajaran statistik selama periode ini.")
+            st.markdown(f"""<div class='interpreter-box'><strong>💡 Interpretasi Otomatis:</strong> Terdeteksi adanya pergerakan harga di luar akal sehat (anomali) pada data yang diamati. Entitas yang paling sering mencatat kejadian ekstrem atau rentan terhadap <i>shock</i> adalah <b>{max_anom}</b> (dengan total {anom_counts[max_anom]} deteksi tak wajar). Disarankan instansi terkait memfokuskan investigasi logistik pada titik ini.</div>""", unsafe_allow_html=True)
+        else: st.success("✅ Seluruh wilayah/pulau terpilih bergerak normal sesuai batas kewajaran statistik selama periode ini (Tidak ada anomali).")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
@@ -512,7 +567,16 @@ with tab_anomali:
 # =============================================================================
 with tab_spasial:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Mengetahui apakah kenaikan harga di satu wilayah akan merembet (<i>spillover effect</i>) ke wilayah lainnya. Korelasi tinggi (>0.8) menandakan integrasi pasar yang kuat.</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Mengukur fenomena <i>Spillover Effect</i> atau penularan harga antar lokasi. Mengetahui apakah kenaikan harga di satu daerah mempengaruhi harga daerah sebelahnya.<br>
+        <strong>Metode:</strong> Pemetaan Geospasial (Choropleth/Scatter) digabung dengan <i>Pearson Cross-Correlation</i> antar wilayah terpilih.<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li><b>Peta (Kiri):</b> Visualisasi wilayah mana yang paling "merah" (mahal) di Indonesia hari ini.</li>
+            <li><b>Heatmap (Kanan):</b> Menguji hubungan antar 2 entitas. Angka mendekati 1 (Hijau terang) berarti pergerakan 100% seragam. Angka 0 (Gelap) berarti tak ada hubungan.</li>
+            <li>Jika provinsi A dan B punya korelasi 0.95, maka penumpukan stok operasi pasar di provinsi A hampir pasti akan ikut menurunkan harga di provinsi B.</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     col_s1, col_s2 = st.columns([1, 1])
@@ -537,13 +601,12 @@ with tab_spasial:
             fig_corr.update_layout(height=400, margin=dict(l=10,r=10,t=10,b=50), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(tickangle=-45, tickfont=dict(size=11, color='#9BAABD')), yaxis=dict(tickfont=dict(size=11, color='#9BAABD')))
             st.plotly_chart(fig_corr, use_container_width=True, config={'displayModeBar': False})
             
-            # Cari korelasi absolut tertinggi (di luar diagonal)
             corr_matrix_masked = corr_matrix.where(~np.eye(corr_matrix.shape[0], dtype=bool))
             if not corr_matrix_masked.isna().all().all():
                 max_corr_val = corr_matrix_masked.max().max()
                 prov_a, prov_b = corr_matrix_masked.stack().idxmax()
-                st.markdown(f"""<div class='interpreter-box' style='margin-top:0;'><strong>💡 Interpretasi Otomatis:</strong> Pasangan pasar dengan hubungan terkuat adalah <b>{prov_a}</b> dan <b>{prov_b}</b> (r = {max_corr_val:.2f}). Kebijakan atau goncangan harga pada salah satu dari dua wilayah ini kemungkinan besar akan tertransmisi secara langsung ke wilayah pasangannya.</div>""", unsafe_allow_html=True)
-        else: st.info(f"Pilih setidaknya 2 {compare_mode.split(' ')[1].lower()} untuk menghasilkan matriks korelasi.")
+                st.markdown(f"""<div class='interpreter-box' style='margin-top:0;'><strong>💡 Interpretasi Otomatis:</strong> Pasangan dengan transmisi penularan harga paling kuat/identik adalah <b>{prov_a}</b> dan <b>{prov_b}</b> (r = {max_corr_val:.2f}). Kebijakan peredaman harga pada salah satu dari dua entitas ini kemungkinan besar akan ikut berdampak langsung ke entitas pasangannya.</div>""", unsafe_allow_html=True)
+        else: st.info(f"Pilih setidaknya 2 entitas untuk menghasilkan matriks korelasi.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
@@ -551,7 +614,16 @@ with tab_spasial:
 # =============================================================================
 with tab_entropi:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Model <i>Shannon Entropy</i> mengukur tingkat keacakan/kompleksitas harga. Entropi Tinggi menandakan harga bergerak secara acak (uncertainty tinggi). Entropi Rendah menandakan harga yang kaku/monoton (<i>price stickiness</i>).</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Mengukur tingkat "Kekacauan" (<i>Randomness</i>) atau seberapa sulit harga diprediksi secara matematis.<br>
+        <strong>Metode:</strong> Model Teori Informasi <i>Shannon Entropy</i> pada nilai turunan harga harian (Log Returns).<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li>Panjang bar menunjukkan nilai entropi dalam satuan <i>bits</i>.</li>
+            <li><b>Entropi Tinggi:</b> Harga ayam bergerak sangat acak (menyebar rata), menandakan iklim ketidakpastian tinggi di pasar tersebut (penuh fluktuasi tanpa arah pasti).</li>
+            <li><b>Entropi Rendah:</b> Harga bergerak kaku (<i>Price Stickiness</i>) atau sangat mudah diprediksi. Biasanya dikontrol kuat oleh pasokan dominan.</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     if plot_data:
@@ -572,8 +644,8 @@ with tab_entropi:
         with col_e2:
             max_ent = df_ent.iloc[-1]
             min_ent = df_ent[df_ent['Entitas'] != 'Nasional'].iloc[0] if len(df_ent) > 1 else df_ent.iloc[0]
-            st.markdown(f"""<div class='interpreter-box' style='height:90%;'><strong>💡 Interpretasi Otomatis:</strong><br><br><b>Paling Acak:</b> <b>{max_ent['Entitas']}</b> ({max_ent['Entropi (bits)']:.3f} bits). Pasar sangat dinamis, menyulitkan forecasting presisi harian.<br><br><b>Paling Kaku/Teratur:</b> <b>{min_ent['Entitas']}</b> ({min_ent['Entropi (bits)']:.3f} bits). Harga bergerak sangat monoton dan mudah diprediksi, menandakan adanya kontrol pasar (atau dominasi pasokan) yang kuat di wilayah ini.</div>""", unsafe_allow_html=True)
-    else: st.info("Pilih wilayah/pulau terlebih dahulu untuk menganalisis entropi pasar.")
+            st.markdown(f"""<div class='interpreter-box' style='height:90%;'><strong>💡 Interpretasi Otomatis:</strong><br><br><b>Pasar Paling Acak:</b> <b>{max_ent['Entitas']}</b> ({max_ent['Entropi (bits)']:.3f} bits). Pasar bertindak dinamis, sangat menyulitkan sistem peramalan (forecasting) presisi harian.<br><br><b>Pasar Paling Kaku/Teratur:</b> <b>{min_ent['Entitas']}</b> ({min_ent['Entropi (bits)']:.3f} bits). Pergerakan harga monoton, menandakan struktur distribusi pasokan yang dominan dan pasti.</div>""", unsafe_allow_html=True)
+    else: st.info("Pilih wilayah/pulau terlebih dahulu.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
@@ -581,7 +653,16 @@ with tab_entropi:
 # =============================================================================
 with tab_halflife:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Mengukur <i>Half-Life</i> (waktu paruh) dari <i>Mean Reversion</i> menggunakan pendekatan model AR(1). Ini menunjukkan **berapa hari yang dibutuhkan agar separuh dari lonjakan harga (shock) terserap kembali ke titik normal/rata-rata**.<br><strong>Cara Baca:</strong> Nilai ditampilkan dalam hitungan <b>Hari</b>. Wilayah dengan <i>Half-Life</i> pendek berarti pasarnya efisien (suplai cepat menutupi lonjakan harga). Bar berwarna merah ('Tak Terhingga') berarti harganya gagal kembali (<i>Random Walk / Explosive trend</i>).</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Mengukur seberapa efisien pasar memulihkan diri (<i>recovery</i>) setelah terjadi kepanikan atau lonjakan harga (<i>shock</i>).<br>
+        <strong>Metode:</strong> Ekstraksi parameter model <i>Auto-Regressive AR(1)</i> untuk menghitung nilai <i>Half-Life</i> (Waktu Paruh) <i>Mean Reversion</i>.<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li>Nilai ditampilkan dalam hitungan <b>Hari</b>.</li>
+            <li>Wilayah dengan hari <b>paling pendek</b> berarti pasarnya sangat efisien (jika harga meroket, cepat sekali kembali normal karena suplai cepat diguyur).</li>
+            <li>Bar merah <b>"Tak Terhingga"</b> menandakan harga yang telah meroket gagal kembali turun (terjadi inflasi permanen / <i>Random Walk</i>).</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     if plot_data:
@@ -590,83 +671,107 @@ with tab_halflife:
             hl_results.append({'Entitas': name, 'Half-Life (Hari)': calc_half_life(series), 'Warna': PALETTE[i % len(PALETTE)]})
             
         df_hl = pd.DataFrame(hl_results).sort_values('Half-Life (Hari)', ascending=True)
-        # Cap inf values for plotting aesthetics
         df_hl_plot = df_hl.copy()
         df_hl_plot['Plot_HL'] = df_hl_plot['Half-Life (Hari)'].apply(lambda x: 365 if x == np.inf else x)
-        df_hl_plot['Teks_HL'] = df_hl_plot['Half-Life (Hari)'].apply(lambda x: "Tak Terhingga (Unit Root)" if x == np.inf else f"{x:.1f} Hari")
+        df_hl_plot['Teks_HL'] = df_hl_plot['Half-Life (Hari)'].apply(lambda x: "Tak Terhingga (Eksplosif)" if x == np.inf else f"{x:.1f} Hari")
         df_hl_plot['Plot_Warna'] = df_hl_plot.apply(lambda row: '#F87171' if row['Half-Life (Hari)'] == np.inf else row['Warna'], axis=1)
 
         col_hl1, col_hl2 = st.columns([2, 1])
         
         with col_hl1:
             fig_hl = px.bar(df_hl_plot, x='Plot_HL', y='Entitas', orientation='h', color='Entitas', color_discrete_map=dict(zip(df_hl_plot['Entitas'], df_hl_plot['Plot_Warna'])), text='Teks_HL')
-            fig_hl.update_traces(textposition='outside', marker_line_width=0, hovertemplate='<b>%{y}</b><br>Waktu Paruh: %{text}<extra></extra>')
+            fig_hl.update_traces(textposition='outside', marker_line_width=0, hovertemplate='<b>%{y}</b><br>Waktu Pemulihan: %{text}<extra></extra>')
             fig_hl = apply_beautiful_layout(fig_hl, f"Kecepatan Penyerapan Shock Harga (Half-Life)")
-            fig_hl.update_layout(height=400, showlegend=False, xaxis=dict(title="Hari (Makin Singkat Makin Efisien)"), yaxis=dict(title="", tickfont=dict(size=12)))
+            fig_hl.update_layout(height=400, showlegend=False, xaxis=dict(title="Hari (Makin Cepat Makin Baik)"), yaxis=dict(title="", tickfont=dict(size=12)))
             st.plotly_chart(fig_hl, use_container_width=True, config={'displayModeBar': False})
             
         with col_hl2:
             valids = df_hl[df_hl['Half-Life (Hari)'] != np.inf]
             if not valids.empty:
                 fastest = valids.iloc[0]
-                st.markdown(f"""<div class='interpreter-box' style='height:90%;'><strong>💡 Interpretasi Otomatis:</strong><br><br>Pasar paling efisien dalam menyerap guncangan harga adalah <b>{fastest['Entitas']}</b> (hanya butuh <b>{fastest['Half-Life (Hari)']:.1f} hari</b> untuk meredam separuh lonjakan).<br><br>Perhatikan entitas berlabel 'Tak Terhingga' (jika ada). Di wilayah tersebut, setiap lonjakan harga cenderung menjadi permanen membentuk harga dasar baru (<i>sticky inflation</i>).</div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class='interpreter-box' style='height:90%;'><strong>💡 Interpretasi Otomatis:</strong><br><br>Pasar berkinerja terbaik/paling sehat dalam meredam gejolak harga adalah <b>{fastest['Entitas']}</b> (hanya butuh <b>{fastest['Half-Life (Hari)']:.1f} hari</b> untuk meredam separuh kepanikan harga).<br><br>Waspadai entitas merah (Tak Terhingga); ini menandakan pasar yang kaku ke bawah (harganya gampang naik, tapi susah turun lagi).</div>""", unsafe_allow_html=True)
             else:
-                st.markdown("""<div class='interpreter-box' style='height:90%;'><strong>💡 Interpretasi Otomatis:</strong> Seluruh pasar saat ini tidak menunjukkan pola <i>mean-reverting</i>. Lonjakan harga bersifat permanen (Random Walk) pada rentang waktu ini.</div>""", unsafe_allow_html=True)
+                st.markdown("""<div class='interpreter-box' style='height:90%;'><strong>💡 Interpretasi Otomatis:</strong> Seluruh entitas pasar pada rentang waktu terpilih bersifat eksplosif (Tak Terhingga). Lonjakan harga bersifat permanen membentuk level ekuilibrium harga baru yang lebih tinggi.</div>""", unsafe_allow_html=True)
     else: st.info("Pilih wilayah/pulau terlebih dahulu.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 9: ANALISIS PRA-EVENT (EFEK HARI RAYA/LIBUR)
+# TAB 9: PRA & PASCA EVENT (EFEK HARI RAYA/KALENDER)
 # =============================================================================
 with tab_preevent:
     with st.expander("📖 Panduan Analisis", expanded=False):
-        st.markdown("<div class='guide-box'><strong>Tujuan:</strong> Mengekstrak dan menganalisis pola kenaikan harga secara spesifik <b>H-X hari sebelum event/hari raya besar</b>.<br><strong>Cara Baca:</strong> Pilih Event dan Tahun, lalu tentukan berapa hari sebelum event yang ingin diamati. Grafik akan langsung me-zoom-in pada jendela waktu (<i>window</i>) tersebut. Persentase inflasi Pra-Event akan dihitung secara otomatis.</div>", unsafe_allow_html=True)
+        st.markdown("""<div class='guide-box'>
+        <strong>Tujuan:</strong> Menginvestigasi perilaku pembentukan harga (Spekulasi/Inflasi Musiman) sebelum dan sesudah <i>event</i> besar atau hari libur nasional.<br>
+        <strong>Metode:</strong> <i>Event Study Analysis</i> / Windowing Data berdasarkan kalender. Membandingkan data N-hari sebelum dan N-hari sesudah tanggal event berlangsung.<br>
+        <strong>Cara Baca & Interpretasi:</strong>
+        <ul>
+            <li>Atur Event, Tahun, serta lebar jendela sebelum (H-) dan sesudah (H+) pada slider.</li>
+            <li>Garis vertikal merah putus-putus pada grafik menandakan tepat pada hari "H" perayaan.</li>
+            <li>Jika harga menanjak agresif di area H- dan runtuh tajam di area H+, ini membuktikan fenomena tarikan permintaan musiman spesifik akibat acara tersebut.</li>
+        </ul>
+        </div>""", unsafe_allow_html=True)
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     
-    col_e1, col_e2, col_e3 = st.columns(3)
-    ev_name = col_e1.selectbox("Pilih Event (Hari Raya)", list(EVENT_DATES.keys()))
-    ev_years = [y for y, d in EVENT_DATES[ev_name].items() if pd.to_datetime(d) <= df_full['Tanggal'].max() + pd.Timedelta(days=30)] # Filter tahun yg masuk akal
+    # UI Control Bar
+    row_ev1 = st.columns([1, 1, 1, 1])
+    ev_name = row_ev1[0].selectbox("Pilih Perayaan Nasional:", list(EVENT_DATES.keys()))
+    ev_years = [y for y, d in EVENT_DATES[ev_name].items() if pd.to_datetime(d) <= df_full['Tanggal'].max() + pd.Timedelta(days=60)] 
+    
     if not ev_years:
         st.warning("Data histori tidak mencakup event ini. Pilih event lain.")
     else:
-        ev_year = col_e2.selectbox("Pilih Tahun Event", ev_years)
-        days_before = col_e3.slider("Fokus H- (Hari sebelum event)", min_value=7, max_value=60, value=30, step=1)
+        ev_year = row_ev1[1].selectbox("Tahun Kejadian:", ev_years)
+        days_before = row_ev1[2].slider("Fokus Pra-Event (H-)", 0, 60, 14, 1, help="Berapa hari sebelum acara")
+        days_after = row_ev1[3].slider("Fokus Pasca-Event (H+)", 0, 60, 14, 1, help="Berapa hari setelah acara")
         
-        # Ekstrak Tanggal Event
         target_date = pd.to_datetime(EVENT_DATES[ev_name][ev_year])
-        start_pre_date = target_date - pd.Timedelta(days=days_before)
-        end_pre_date = target_date - pd.Timedelta(days=1)
+        start_date = target_date - pd.Timedelta(days=days_before)
+        end_date = target_date + pd.Timedelta(days=days_after)
         
-        st.markdown(f"<div align='center' style='padding: 10px; background:#1C232D; border-radius:8px; margin-top:10px;'>🗓️ Jendela Pengamatan: <b>{start_pre_date.strftime('%d %b %Y')}</b> s/d <b>{end_pre_date.strftime('%d %b %Y')}</b> (Tepat sebelum {ev_name} {ev_year})</div>", unsafe_allow_html=True)
+        st.markdown(f"<div align='center' style='padding: 8px; background:#1C232D; border-radius:8px; margin-top:10px; font-size:14px;'>🗓️ Tanggal Puncak (Hari H): <b style='color:#F87171'>{target_date.strftime('%d %b %Y')}</b> | Analisis mulai <b>{start_date.strftime('%d %b')}</b> s/d <b>{end_date.strftime('%d %b')}</b></div>", unsafe_allow_html=True)
         
-        # Filter Data Khusus (mengabaikan filter rentang waktu global agar aman)
-        df_event = df_full[(df_full['Tanggal'] >= start_pre_date) & (df_full['Tanggal'] <= end_pre_date)]
+        # Ekstraksi Data Spesifik Jendela Event
+        df_event = df_full[(df_full['Tanggal'] >= start_date) & (df_full['Tanggal'] <= end_date)]
         
         if df_event.empty:
-            st.warning("Tidak ada data histori pada jendela waktu ini. Mungkin data belum diupdate hingga tanggal tersebut.")
+            st.warning("Sistem tidak memiliki riwayat data pada jendela waktu ini (data belum terupdate ke sistem pusat).")
         else:
             fig_ev = go.Figure()
-            # Garis Nasional untuk Event
+            
+            # Plot Nasional
             nat_ev = df_event.groupby('Tanggal')['Harga'].mean()
             fig_ev.add_trace(go.Scatter(x=nat_ev.index, y=nat_ev.values, name='Nasional', fill='tozeroy', fillcolor='rgba(61,214,140,0.15)', line=dict(color='#3DD68C', width=3)))
             
-            # Hitung Inflasi Event Nasional
-            inflasi_nat = ((nat_ev.iloc[-1] - nat_ev.iloc[0]) / nat_ev.iloc[0]) * 100 if not nat_ev.empty and len(nat_ev) > 1 else 0
-            
-            # Plot Entitas Terpilih
+            # Plot Entitas
             for i, reg in enumerate(selected_regs):
                 filter_col = 'Wilayah' if compare_mode == "Per Provinsi" else 'Pulau'
                 s_ev = df_event[df_event[filter_col] == reg].groupby('Tanggal')['Harga'].mean()
                 if not s_ev.empty:
                     fig_ev.add_trace(go.Scatter(x=s_ev.index, y=s_ev.values, name=reg, line=dict(color=PALETTE[i % len(PALETTE)], width=1.5)))
             
-            fig_ev = apply_beautiful_layout(fig_ev, f"Dinamika Harga H-{days_before} Menjelang {ev_name} {ev_year}")
-            fig_ev.update_layout(height=400)
+            # Garis Vertikal Penanda Hari H
+            fig_ev.add_vline(x=target_date.timestamp() * 1000, line_width=2, line_dash="dash", line_color="#F87171")
+            fig_ev.add_annotation(x=target_date.timestamp() * 1000, y=1, yref="paper", text="Hari 'H'", showarrow=False, bgcolor="#F87171", font=dict(color="white"))
+            
+            fig_ev = apply_beautiful_layout(fig_ev, f"Dinamika Event H-{days_before} hingga H+{days_after} ({ev_name} {ev_year})")
+            fig_ev.update_layout(height=450)
             st.plotly_chart(fig_ev, use_container_width=True, config={'displayModeBar': False})
             
-            # INTERPRETER OTOMATIS EVENT
-            inflasi_teks = f"**naik** sebesar **{abs(inflasi_nat):.1f}%**" if inflasi_nat > 0 else f"**turun** sebesar **{abs(inflasi_nat):.1f}%**" if inflasi_nat < 0 else "**stagnan**"
-            st.markdown(f"""<div class='interpreter-box'><strong>💡 Wawasan Efek Kalender (Calendar Effect):</strong> Selama pengamatan H-{days_before} hari menjelang perayaan {ev_name} di tahun {ev_year}, rata-rata harga daging ayam secara Nasional {inflasi_teks}. Ini mengindikasikan { 'adanya tarikan permintaan (<i>demand pull inflation</i>) musiman yang lumrah' if inflasi_nat > 0 else 'bahwa pasokan pasar terbukti melimpah dan aman mengkover lonjakan permintaan jelang hari raya tersebut' }.</div>""", unsafe_allow_html=True)
+            # KALKULATOR EFEK & INTERPRETER
+            if not nat_ev.empty:
+                val_start = nat_ev.iloc[0]
+                val_peak = nat_ev.loc[:target_date].iloc[-1] if not nat_ev.loc[:target_date].empty else val_start
+                val_end = nat_ev.iloc[-1]
+                
+                inflasi_pra = ((val_peak - val_start) / val_start) * 100 if days_before > 0 else 0
+                inflasi_pasca = ((val_end - val_peak) / val_peak) * 100 if days_after > 0 else 0
+                
+                teks_pra = f"**naik {abs(inflasi_pra):.2f}%**" if inflasi_pra > 0 else f"**turun {abs(inflasi_pra):.2f}%**"
+                teks_pasca = f"**naik {abs(inflasi_pasca):.2f}%**" if inflasi_pasca > 0 else f"**mereda/turun {abs(inflasi_pasca):.2f}%**"
+                
+                st.markdown(f"""<div class='interpreter-box'><strong>💡 Wawasan Efek Kalender (Calendar Effect) Secara Nasional:</strong><br><br>
+                1. <b>Fase Eskalasi (Pra-Event):</b> Selama H-{days_before} sebelum acara, harga {teks_pra}. {'Ini wajar terjadi karena *demand pull inflation* musiman.' if inflasi_pra > 0 else 'Fakta menarik, pasokan aman menahan inflasi walau permintaan akan meninggi.'}<br>
+                2. <b>Fase Pendinginan (Pasca-Event):</b> Setelah acara berlalu (H+{days_after}), harga tercatat {teks_pasca}. {'Harga mereda normal menyesuaikan titik wajarnya.' if inflasi_pasca <= 0 else 'Awas! Harga justru tetap meroket setelah perayaan usai, ada kemungkinan pasokan logistik terkuras habis di hari raya.'}</div>""", unsafe_allow_html=True)
             
     st.markdown("</div>", unsafe_allow_html=True)
