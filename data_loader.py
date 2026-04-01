@@ -4,113 +4,105 @@ import os
 import re
 from datetime import datetime
 
+# Koordinat Provinsi di Indonesia untuk Visualisasi Peta
+PROVINCE_COORDINATES = {
+    'Aceh': [4.6951, 96.7494],
+    'Sumatera Utara': [2.1121, 99.0557],
+    'Sumatera Barat': [-0.7392, 100.8000],
+    'Riau': [0.2933, 101.7068],
+    'Jambi': [-1.6183, 103.6238],
+    'Sumatera Selatan': [-3.3194, 103.9144],
+    'Bengkulu': [-3.7928, 102.2608],
+    'Lampung': [-4.5586, 105.4068],
+    'Kepulauan Bangka Belitung': [-2.7410, 106.4406],
+    'Kepulauan Riau': [3.9456, 108.1429],
+    'DKI Jakarta': [-6.2088, 106.8456],
+    'Jawa Barat': [-7.0909, 107.6689],
+    'Jawa Tengah': [-7.1510, 110.1403],
+    'Daerah Istimewa Yogyakarta': [-7.8753, 110.4262],
+    'Jawa Timur': [-7.5361, 112.2384],
+    'Banten': [-6.4058, 106.0605],
+    'Bali': [-8.4095, 115.1889],
+    'Nusa Tenggara Barat': [-8.6529, 117.3616],
+    'Nusa Tenggara Timur': [-8.6574, 121.0794],
+    'Kalimantan Barat': [-0.2784, 109.9754],
+    'Kalimantan Tengah': [-1.6815, 113.3824],
+    'Kalimantan Selatan': [-3.0926, 115.2838],
+    'Kalimantan Timur': [0.5387, 116.4194],
+    'Kalimantan Utara': [3.0731, 116.0414],
+    'Sulawesi Utara': [0.6247, 123.9750],
+    'Sulawesi Tengah': [-1.4300, 121.4456],
+    'Sulawesi Selatan': [-3.9722, 119.8159],
+    'Sulawesi Tenggara': [-4.1449, 122.1746],
+    'Gorontalo': [0.6999, 122.4467],
+    'Sulawesi Barat': [-2.8441, 119.2321],
+    'Maluku': [-3.2385, 130.1453],
+    'Maluku Utara': [1.5709, 127.8088],
+    'Papua': [-4.2699, 138.0804],
+    'Papua Barat': [-1.3361, 132.5753],
+    'Papua Selatan': [-7.5000, 139.0000],
+    'Papua Tengah': [-3.5000, 136.0000],
+    'Papua Pegunungan': [-4.0000, 139.0000],
+    'Papua Barat Daya': [-0.8000, 131.5000]
+}
 
-def extract_date_from_filename(filename):
-    """Extract date range from filename like Statistik_Harian_20250101__20250131_Daging_Ayam_Ras.xlsx"""
-    match = re.search(r'(\d{8})__(\d{8})', filename)
-    if match:
-        start_date = match.group(1)
-        end_date = match.group(2)
-        return start_date, end_date
-    return None, None
-
-
-def load_excel_file(filepath):
-    """Load a single Excel file and return cleaned dataframe"""
+def load_single_csv(filepath):
+    """Membaca file CSV hasil export Excel dengan struktur metadata di awal"""
     try:
-        # Read the 'Average Prices' sheet with header at row 2 (0-indexed)
-        df = pd.read_excel(filepath, sheet_name='Average Prices', header=2)
+        # File CSV memiliki 3 baris metadata, header mulai di baris ke-4 (index 3)
+        df = pd.read_csv(filepath, skiprows=3)
         
-        # Rename first column to 'Wilayah'
+        # Kolom pertama biasanya nama wilayah
         df = df.rename(columns={df.columns[0]: 'Wilayah'})
         
-        # Get the actual dates from the header row (they're in the first data row after header)
-        # The dates are stored as column names but prefixed with 'Unnamed:'
-        date_columns = []
-        for col in df.columns[1:]:  # Skip 'Wilayah' column
-            # Get the value from the first row to find the actual date
-            val = df.iloc[0][col]
-            if pd.notna(val) and isinstance(val, (datetime, pd.Timestamp)):
-                date_columns.append(val.strftime('%Y-%m-%d'))
-            elif pd.notna(val) and isinstance(val, str) and re.match(r'\d{4}-\d{2}-\d{2}', str(val)):
-                date_columns.append(str(val))
-            else:
-                date_columns.append(col)
+        # Hapus baris kosong atau baris 'Sumber Data' jika ada
+        df = df[df['Wilayah'].notna()]
+        df = df[~df['Wilayah'].str.contains('Sumber Data', na=False, case=False)]
         
-        # Create new column names
-        new_columns = ['Wilayah'] + date_columns
-        df.columns = new_columns
+        # Melt data dari format kolom tanggal ke format baris (long format)
+        id_vars = ['Wilayah']
+        date_cols = [c for c in df.columns if c not in id_vars and not c.startswith('Unnamed')]
         
-        # Melt the dataframe to long format
-        melted = df.melt(id_vars=['Wilayah'], var_name='Tanggal', value_name='Harga')
+        melted = df.melt(id_vars=id_vars, value_vars=date_cols, var_name='Tanggal', value_name='Harga')
         
-        # Convert Harga to numeric, coerce errors to NaN
+        # Bersihkan data
         melted['Harga'] = pd.to_numeric(melted['Harga'], errors='coerce')
-        
-        # Filter out rows where Harga is 0 or NaN
-        melted = melted[melted['Harga'] > 0]
-        
-        # Convert Tanggal to datetime
         melted['Tanggal'] = pd.to_datetime(melted['Tanggal'], errors='coerce')
         
-        # Drop rows with invalid dates
-        melted = melted.dropna(subset=['Tanggal'])
+        # Hapus data yang tidak valid (Harga 0 atau Tanggal null)
+        melted = melted.dropna(subset=['Tanggal', 'Harga'])
+        melted = melted[melted['Harga'] > 0]
         
         return melted
     except Exception as e:
-        print(f"Error loading {filepath}: {e}")
+        print(f"Gagal memuat {filepath}: {e}")
         return pd.DataFrame()
-
 
 def load_all_data(data_folder='Data'):
-    """Load all Excel files from the data folder automatically"""
-    # Find all Excel files
-    pattern = os.path.join(data_folder, '*.xlsx')
-    excel_files = glob.glob(pattern)
+    """Memuat semua file CSV dari folder Data"""
+    # Cari file .csv (karena file yang diupload adalah CSV hasil export)
+    csv_files = glob.glob(os.path.join(data_folder, '*.csv'))
     
-    if not excel_files:
-        print(f"No Excel files found in {data_folder}")
+    if not csv_files:
         return pd.DataFrame()
     
-    # Sort files by name to ensure chronological order
-    excel_files.sort()
+    all_dfs = []
+    for f in csv_files:
+        df_part = load_single_csv(f)
+        if not df_part.empty:
+            all_dfs.append(df_part)
+            
+    if not all_dfs:
+        return pd.DataFrame()
+        
+    full_df = pd.concat(all_dfs, ignore_index=True)
     
-    all_data = []
+    # Tambahkan koordinat
+    full_df['Lat'] = full_df['Wilayah'].map(lambda x: PROVINCE_COORDINATES.get(x, [0,0])[0])
+    full_df['Lon'] = full_df['Wilayah'].map(lambda x: PROVINCE_COORDINATES.get(x, [0,0])[1])
     
-    for filepath in excel_files:
-        filename = os.path.basename(filepath)
-        print(f"Loading: {filename}")
-        
-        df = load_excel_file(filepath)
-        
-        if not df.empty:
-            # Add source file info
-            df['SourceFile'] = filename
-            all_data.append(df)
+    # Tambahkan Prev_Harga untuk kalkulasi delta
+    full_df = full_df.sort_values(['Wilayah', 'Tanggal'])
+    full_df['Prev_Harga'] = full_df.groupby('Wilayah')['Harga'].shift(1)
     
-    if all_data:
-        combined_df = pd.concat(all_data, ignore_index=True)
-        
-        # Remove duplicates based on Wilayah and Tanggal
-        combined_df = combined_df.drop_duplicates(subset=['Wilayah', 'Tanggal'], keep='last')
-        
-        # Sort by Tanggal and Wilayah
-        combined_df = combined_df.sort_values(['Tanggal', 'Wilayah']).reset_index(drop=True)
-        
-        print(f"\nTotal records loaded: {len(combined_df)}")
-        print(f"Date range: {combined_df['Tanggal'].min()} to {combined_df['Tanggal'].max()}")
-        print(f"Number of regions: {combined_df['Wilayah'].nunique()}")
-        
-        return combined_df
-    
-    return pd.DataFrame()
-
-
-if __name__ == "__main__":
-    # Test the loader
-    df = load_all_data('Data')
-    if not df.empty:
-        print("\nFirst 10 rows:")
-        print(df.head(10))
-        print("\nColumn types:")
-        print(df.dtypes)
+    return full_df.reset_index(drop=True)
