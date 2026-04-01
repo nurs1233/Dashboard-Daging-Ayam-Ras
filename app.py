@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import timedelta
 import os
 from data_loader import load_all_data
 
@@ -11,31 +11,93 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
-    page_title="Market Intelligence | Daging Ayam Ras",
+    page_title="Agrarian Intelligence | Daging Ayam Ras",
     page_icon="🐔",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- CSS KUSTOM ---
+# --- CSS KUSTOM (Meniru Tailwind Design) ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
-    * { font-family: 'Plus Jakarta Sans', sans-serif; }
-    :root { --primary: #012D1D; --accent: #EAB308; --success: #16A34A; --danger: #DC2626; --neutral: #64748B; }
-    header, footer { visibility: hidden; }
-    .main { background-color: #F8FAFC; }
-    section[data-testid="stSidebar"] { background-color: #012D1D !important; border-right: 1px solid rgba(255,255,255,0.1); }
-    section[data-testid="stSidebar"] .stMarkdown h3 { color: white !important; }
-    .metric-card { background: white; padding: 1.2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #F1F5F9; }
-    .card-label { font-size: 0.7rem; font-weight: 700; color: var(--neutral); text-transform: uppercase; }
-    .card-value { font-size: 1.5rem; font-weight: 800; color: var(--primary); margin: 0.2rem 0; }
-    .delta-up { color: var(--danger); font-size: 0.7rem; font-weight: 600; }
-    .delta-down { color: var(--success); font-size: 0.7rem; font-weight: 600; }
-    .chart-container { background: white; padding: 1.5rem; border-radius: 1rem; border: 1px solid #F1F5F9; margin-bottom: 1.5rem; }
-    .pulse { width: 10px; height: 10px; background: #16A34A; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
-    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); } 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); } }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap');
+    
+    /* Global Typography & Background */
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    h1, h2, h3, h4, h5, h6 { font-family: 'Manrope', sans-serif !important; }
+    .stApp { background-color: #F3F4F5; }
+    
+    /* Top Navigation Simulation */
+    .top-nav {
+        background-color: #ffffff;
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #E1E3E4;
+        margin: -4rem -4rem 2rem -4rem;
+        z-index: 999;
+    }
+    .top-nav-brand { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 1.25rem; color: #012D1D; }
+    
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] { 
+        background-color: #012D1D !important; 
+        border-right: none;
+    }
+    section[data-testid="stSidebar"] * { color: #D8F3DC; }
+    section[data-testid="stSidebar"] .stSelectbox label, 
+    section[data-testid="stSidebar"] .stSlider label,
+    section[data-testid="stSidebar"] .stDateInput label {
+        color: #86AF99 !important;
+        font-size: 10px !important;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+    
+    /* Header Section */
+    .header-container { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; }
+    .live-badge { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .pulse { width: 8px; height: 8px; background: #16A34A; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); } 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); } }
+    .page-title { font-size: 2.25rem; font-weight: 800; color: #012D1D; margin: 0; line-height: 1.2; }
+    .page-subtitle { color: #414844; font-size: 0.9rem; margin-top: 4px; }
+    
+    /* Bento Grid Cards */
+    .bento-card {
+        background-color: #ffffff;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        height: 100%;
+        border: 1px solid #E1E3E4;
+    }
+    
+    /* Metric Cards */
+    .metric-wrapper { display: flex; flex-direction: column; justify-content: space-between; height: 120px; }
+    .metric-title { font-size: 10px; font-weight: 700; color: #717973; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric-value-container { display: flex; align-items: baseline; gap: 4px; margin-top: 1rem; }
+    .metric-currency { font-size: 0.875rem; font-weight: 700; color: #717973; }
+    .metric-value { font-size: 1.875rem; font-weight: 800; color: #012D1D; }
+    .metric-sub { font-size: 0.75rem; color: #717973; margin-top: 4px; font-weight: 500;}
+    
+    .border-secondary { border-left: 4px solid #8E4E14; }
+    .border-success { border-left: 4px solid #16A34A; }
+    .border-error { border-left: 4px solid #BA1A1A; }
+    .border-primary { border-left: 4px solid #012D1D; }
+    
+    /* Hide Streamlit elements */
+    header[data-testid="stHeader"] { display: none; }
+    .block-container { padding-top: 4rem; }
 </style>
+""", unsafe_allow_html=True)
+
+# --- FAKE TOP NAV ---
+st.markdown("""
+<div class="top-nav">
+    <div class="top-nav-brand">Agrarian Intelligence</div>
+    <div style="color: #717973; font-size: 14px; font-weight: 600;">Dashboard &nbsp; • &nbsp; Analysis &nbsp; • &nbsp; Reports</div>
+</div>
 """, unsafe_allow_html=True)
 
 # --- PEMUATAN DATA ---
@@ -46,33 +108,24 @@ def get_data():
 df_full = get_data()
 
 if df_full.empty:
-    st.warning("📊 **Mencoba memuat data...**")
-    st.info("Jika data tidak muncul, pastikan folder `Data` berisi file `.xlsx` atau `.csv` yang valid.")
-    
-    with st.expander("🛠️ Panel Debugging"):
-        st.write("**Lokasi Base:**", BASE_DIR)
-        data_path = os.path.join(BASE_DIR, 'Data')
-        if os.path.exists(data_path):
-            st.write("**Isi Folder Data:**", os.listdir(data_path))
-        else:
-            st.error("Folder 'Data' tidak ditemukan!")
+    st.error("Data tidak ditemukan! Pastikan folder `Data` berisi file `.xlsx` atau `.csv` yang valid.")
     st.stop()
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("<h3 style='margin:0'>🐔 AGRI-INTEL</h3><p style='color: #86AF99; font-size: 10px; font-weight:700;'>MARKET ANALYTICS</p>", unsafe_allow_html=True)
-    st.markdown("---")
+    st.markdown("<div style='display:flex; align-items:center; gap:10px; margin-bottom: 2rem;'><div style='width:40px; height:40px; background:#1B4332; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px;'>🐔</div><div><h1 style='color:white; margin:0; font-size:16px;'>Daging Ayam Ras</h1><p style='color:#86AF99; font-size:10px; margin:0; letter-spacing:1px;'>MARKET INTELLIGENCE</p></div></div>", unsafe_allow_html=True)
     
     max_d = df_full['Tanggal'].max().date()
     min_d = df_full['Tanggal'].min().date()
     
-    date_range = st.date_input("Rentang Waktu", value=(max_d - timedelta(days=30), max_d), min_value=min_d, max_value=max_d)
+    date_range = st.date_input("Timeframe", value=(max_d - timedelta(days=30), max_d), min_value=min_d, max_value=max_d)
     threshold = st.slider("Batas Waspada (Rp)", 25000, 60000, 40000)
     
     all_regs = sorted(df_full['Wilayah'].unique())
-    selected_regions = st.multiselect("Wilayah Fokus", all_regs, default=['DKI Jakarta', 'Jawa Barat', 'Jawa Timur'] if 'DKI Jakarta' in all_regs else all_regs[:3])
+    selected_regions = st.multiselect("Filter Regions", all_regs, default=['DKI Jakarta', 'Jawa Barat', 'Jawa Timur'] if 'DKI Jakarta' in all_regs else all_regs[:3])
     
-    if st.button("🔄 Refresh Data"):
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    if st.button("🔄 Refresh Live Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
@@ -86,73 +139,164 @@ else:
 df['Status'] = df['Harga'].apply(lambda x: 'Waspada' if x > threshold else 'Stabil')
 df_filtered = df[df['Wilayah'].isin(selected_regions)] if selected_regions else df
 
-# --- HEADER ---
-st.markdown(f"""
-<div style='margin-bottom: 25px;'>
-    <div style='display:flex; align-items:center; gap:10px;'>
-        <div class='pulse'></div>
-        <span style='color:var(--neutral); font-weight:700; font-size:11px; letter-spacing:1px;'>REAL-TIME TRACKING</span>
-    </div>
-    <h1 style='color:var(--primary); font-weight:800; margin:0; font-size:2rem;'>Dashboard Daging Ayam Ras</h1>
-    <p style='color:var(--neutral); margin-top:5px; font-size: 0.85rem;'>Visualisasi harga pangan berdasarkan laporan harian SP2KP.</p>
-</div>
-""", unsafe_allow_html=True)
-
-# --- METRIKS ---
-m1, m2, m3, m4 = st.columns(4)
 latest_date = df['Tanggal'].max()
 df_now = df[df['Tanggal'] == latest_date]
 
+# --- HEADER SECTION ---
+col_head1, col_head2 = st.columns([3, 1])
+with col_head1:
+    st.markdown(f"""
+    <div>
+        <div class='live-badge'>
+            <div class='pulse'></div>
+            <span style='font-size: 10px; font-weight: 700; color: #717973; text-transform: uppercase; letter-spacing: 1px;'>Market Live</span>
+        </div>
+        <h1 class='page-title'>Dashboard Harga Daging Ayam Ras</h1>
+        <p class='page-subtitle'>Laporan analisis harga komoditas harian seluruh wilayah Indonesia. Update: {latest_date.strftime('%d %b %Y')}</p>
+    </div>
+    """, unsafe_allow_html=True)
+with col_head2:
+    st.markdown("<br>", unsafe_allow_html=True)
+    # Placeholder for export buttons
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# --- METRIC CARDS ---
 if not df_now.empty:
     avg_now = df_now['Harga'].mean()
-    avg_prev = df_now['Prev_Harga'].mean()
-    delta_pct = ((avg_now - avg_prev) / avg_prev * 100) if (pd.notna(avg_prev) and avg_prev != 0) else 0
-
+    min_row = df_now.loc[df_now['Harga'].idxmin()]
+    max_row = df_now.loc[df_now['Harga'].idxmax()]
+    
+    m1, m2, m3, m4 = st.columns(4)
+    
     with m1:
-        st.markdown(f"<div class='metric-card'><div class='card-label'>Rata-rata Nasional</div><div class='card-value'>Rp {avg_now:,.0f}</div><div class='{'delta-up' if delta_pct > 0 else 'delta-down'}'>{'▲' if delta_pct > 0 else '▼'} {abs(delta_pct):.1f}% vs Kemarin</div></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='bento-card border-secondary metric-wrapper'>
+            <span class='metric-title'>Rata-rata Harga Nasional</span>
+            <div>
+                <div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{avg_now:,.0f}</span></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     with m2:
-        peak = df_now.loc[df_now['Harga'].idxmax()]
-        st.markdown(f"<div class='metric-card'><div class='card-label'>Harga Tertinggi</div><div class='card-value'>Rp {peak['Harga']:,.0f}</div><div style='font-size:11px; color:var(--neutral);'>📍 {peak['Wilayah']}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='bento-card border-success metric-wrapper'>
+            <span class='metric-title'>Harga Terendah</span>
+            <div>
+                <div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{min_row['Harga']:,.0f}</span></div>
+                <div class='metric-sub'>Wilayah: {min_row['Wilayah']}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     with m3:
-        st.markdown(f"<div class='metric-card'><div class='card-label'>Wilayah Waspada</div><div class='card-value' style='color:var(--danger)'>{len(df_now[df_now['Status']=='Waspada'])} Wilayah</div><div style='font-size:11px; color:var(--neutral);'>Batas: Rp {threshold:,.0f}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='bento-card border-error metric-wrapper'>
+            <span class='metric-title'>Harga Tertinggi</span>
+            <div>
+                <div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{max_row['Harga']:,.0f}</span></div>
+                <div class='metric-sub'>Wilayah: {max_row['Wilayah']}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     with m4:
-        st.markdown(f"<div class='metric-card'><div class='card-label'>Cakupan Data</div><div class='card-value' style='font-size:1.1rem'>{len(df_full):,} Poin</div><div style='font-size:11px; color:var(--neutral);'>Update: {latest_date.strftime('%d %b %Y')}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='bento-card border-primary metric-wrapper'>
+            <span class='metric-title'>Total Record Data</span>
+            <div>
+                <div class='metric-value-container'><span class='metric-value'>{len(df_full):,}</span><span class='metric-currency'>Entries</span></div>
+                <div class='metric-sub'>Syncing up to date</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-# --- VISUALS ---
 st.markdown("<br>", unsafe_allow_html=True)
-c1, c2 = st.columns([1.7, 1.3])
+
+# --- CHARTS BENTO GRID ---
+# Row 1: Line Chart (8) & Bar Chart (4)
+c1, c2 = st.columns([2, 1])
 
 with c1:
-    st.markdown("<div class='chart-container'><h3>📈 Tren Pergerakan Harga</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='bento-card'><h3 style='color: #012D1D; font-size: 1.25rem; margin-bottom: 0;'>📈 Tren Harga Over Time</h3><p style='color: #717973; font-size: 0.85rem; margin-bottom: 1rem;'>Pergerakan harga harian berdasarkan wilayah</p>", unsafe_allow_html=True)
+    
     df_line = df.groupby('Tanggal')['Harga'].mean().reset_index()
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df_line['Tanggal'], y=df_line['Harga'], name="Nasional", line=dict(color='#012D1D', width=3)))
+    fig1 = go.Figure()
+    # Nasional
+    fig1.add_trace(go.Scatter(x=df_line['Tanggal'], y=df_line['Harga'], name="Nasional", line=dict(color='#8E4E14', width=3, dash='dash')))
+    
+    # Wilayah Terpilih
+    colors = ['#012D1D', '#16A34A', '#BA1A1A', '#EA9147']
     if selected_regions:
-        for r in selected_regions:
+        for i, r in enumerate(selected_regions[:4]): # Limit to 4 for clean look
             rd = df[df['Wilayah']==r]
-            fig.add_trace(go.Scatter(x=rd['Tanggal'], y=rd['Harga'], name=r, line=dict(width=1.5), opacity=0.5))
-    fig.update_layout(height=350, margin=dict(l=0,r=0,t=10,b=0), hovermode='x unified', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-    st.plotly_chart(fig, use_container_width=True)
+            fig1.add_trace(go.Scatter(x=rd['Tanggal'], y=rd['Harga'], name=r, line=dict(color=colors[i%len(colors)], width=2.5)))
+            
+    fig1.update_layout(height=300, margin=dict(l=0,r=0,t=10,b=0), hovermode='x unified', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
+    fig1.update_xaxes(showgrid=False)
+    fig1.update_yaxes(gridcolor='#E1E3E4')
+    st.plotly_chart(fig1, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 with c2:
-    st.markdown("<div class='chart-container'><h3>🗺️ Peta Harga Wilayah</h3>", unsafe_allow_html=True)
-    df_map = df_now.dropna(subset=['Lat', 'Lon'])
-    if not df_map.empty:
-        fig_map = px.scatter_mapbox(df_map, lat="Lat", lon="Lon", color="Harga", size="Harga", hover_name="Wilayah", color_continuous_scale="RdYlGn_r", size_max=15, zoom=3.2, mapbox_style="carto-positron")
-        fig_map.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
-        st.plotly_chart(fig_map, use_container_width=True)
-    else:
-        st.info("Peta tidak tersedia (Data koordinat tidak cocok).")
+    st.markdown("<div class='bento-card'><h3 style='color: #012D1D; font-size: 1.25rem; margin-bottom: 1rem;'>📊 Rata-rata per Wilayah</h3>", unsafe_allow_html=True)
+    
+    # Top 5 Regions Data
+    top_regions = df_now.sort_values('Harga', ascending=False).head(7)
+    fig2 = px.bar(top_regions, x='Harga', y='Wilayah', orientation='h', color='Harga', color_continuous_scale=['#16A34A', '#EAB308', '#BA1A1A'])
+    fig2.update_layout(height=320, margin=dict(l=0,r=0,t=0,b=0), coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis={'categoryorder':'total ascending'})
+    fig2.update_xaxes(visible=False)
+    fig2.update_yaxes(title="")
+    st.plotly_chart(fig2, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --- TABEL ---
-st.markdown("### 📋 Detail Harga per Wilayah")
-st.dataframe(
-    df_now[['Wilayah', 'Harga', 'Status']].sort_values('Harga', ascending=False).style
-    .format({'Harga': 'Rp {:,.0f}'})
-    .apply(lambda x: ['background-color: #FEE2E2; color: #991B1B' if v == 'Waspada' else '' for v in x], subset=['Status']),
-    use_container_width=True, hide_index=True
-)
+st.markdown("<br>", unsafe_allow_html=True)
 
-st.markdown("<p style='text-align: center; color: #94A3B8; font-size: 10px; margin-top: 30px;'>Dashboard Pro v2.7 • Agri-Intel Corp</p>", unsafe_allow_html=True)
+# Row 2: Map/Heatmap (6) & Box Plot (6)
+c3, c4 = st.columns(2)
+
+with c3:
+    st.markdown("<div class='bento-card'><h3 style='color: #012D1D; font-size: 1.25rem; margin-bottom: 1rem;'>🗺️ Peta Distribusi Harga</h3>", unsafe_allow_html=True)
+    df_map = df_now.dropna(subset=['Lat', 'Lon'])
+    if not df_map.empty:
+        fig_map = px.scatter_mapbox(df_map, lat="Lat", lon="Lon", color="Harga", size="Harga", hover_name="Wilayah", color_continuous_scale=['#16A34A', '#EAB308', '#BA1A1A'], size_max=15, zoom=3.5, mapbox_style="carto-positron")
+        fig_map.update_layout(height=300, margin=dict(l=0,r=0,t=0,b=0), coloraxis_showscale=False)
+        st.plotly_chart(fig_map, use_container_width=True)
+    else:
+        st.info("Data koordinat belum tersedia.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with c4:
+    st.markdown("<div class='bento-card'><h3 style='color: #012D1D; font-size: 1.25rem; margin-bottom: 1rem;'>🕯️ Distribusi Harga (Box Plot)</h3>", unsafe_allow_html=True)
+    
+    # Box plot untuk region yang difilter (atau 5 region random jika tidak ada filter)
+    plot_df = df_filtered if selected_regions else df[df['Wilayah'].isin(df['Wilayah'].unique()[:5])]
+    fig_box = px.box(plot_df, x="Harga", y="Wilayah", color="Wilayah", color_discrete_sequence=['#012D1D', '#8E4E14', '#16A34A', '#EA9147', '#BA1A1A'])
+    fig_box.update_layout(height=300, margin=dict(l=0,r=0,t=0,b=0), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis={'categoryorder':'median ascending'})
+    fig_box.update_xaxes(title="Harga (Rp)", gridcolor='#E1E3E4')
+    fig_box.update_yaxes(title="")
+    st.plotly_chart(fig_box, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# --- DATA TABLE ---
+st.markdown("<div class='bento-card' style='padding: 0;'><div style='padding: 1.5rem; border-bottom: 1px solid #E1E3E4;'><h3 style='color: #012D1D; font-size: 1.25rem; margin:0;'>📋 Rincian Data Harga Harian</h3><p style='color: #717973; font-size: 0.85rem; margin:0;'>Update terbaru dari Provinsi di Indonesia</p></div>", unsafe_allow_html=True)
+
+# Tampilkan tabel menggunakan styling
+styled_df = df_now[['Tanggal', 'Wilayah', 'Harga', 'Status']].sort_values('Harga', ascending=False)
+styled_df['Tanggal'] = styled_df['Tanggal'].dt.strftime('%d %b %Y')
+
+st.dataframe(
+    styled_df.style
+    .format({'Harga': 'Rp {:,.0f}'})
+    .apply(lambda x: ['background-color: #FFDAD6; color: #93000A; font-weight: bold' if v == 'Waspada' else 'background-color: #C1ECD4; color: #002114; font-weight: bold' for v in x], subset=['Status']),
+    use_container_width=True, hide_index=True, height=400
+)
+st.markdown("</div>", unsafe_allow_html=True)
+
+# --- FOOTER ---
+st.markdown("""
+<div style='text-align: center; margin-top: 3rem; padding-bottom: 2rem;'>
+    <h4 style='color: #012D1D; font-weight: 800; font-size: 14px; margin:0;'>Dashboard Harga Daging Ayam Ras</h4>
+    <p style='color: #717973; font-size: 12px; margin-top: 4px;'>Data sourced from Sistem Pemantauan Pasar dan Kebutuhan Pokok (SP2KP). © 2024 Agrarian Intelligence.</p>
+</div>
+""", unsafe_allow_html=True)
