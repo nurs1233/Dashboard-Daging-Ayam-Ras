@@ -259,7 +259,7 @@ with tab_dekomposisi:
     if HAS_STATSMODELS:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         # Resample ke mingguan untuk dekomposisi yang lebih mulus
-        df_nat_weekly = df_view.groupby('Tanggal')['Harga'].mean().resample('W').mean().fillna(method='ffill')
+        df_nat_weekly = df_view.groupby('Tanggal')['Harga'].mean().resample('W').mean().ffill()
         
         if len(df_nat_weekly) > 10:
             # Menggunakan periode 4 (sekitar 1 bulan) karena data mingguan
@@ -327,7 +327,7 @@ with tab_klaster:
         
         # Pivot Data: Baris = Tanggal, Kolom = Wilayah
         pivot_df = df_view.pivot_table(index='Tanggal', columns='Wilayah', values='Harga')
-        pivot_df = pivot_df.fillna(method='ffill').fillna(method='bfill') # Isi data kosong
+        pivot_df = pivot_df.ffill().bfill() # Isi data kosong
         
         # Hapus provinsi yang masih punya NaN murni
         pivot_df = pivot_df.dropna(axis=1)
