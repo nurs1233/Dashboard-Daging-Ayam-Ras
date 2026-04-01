@@ -58,6 +58,8 @@ header[data-testid="stHeader"] { display: none !important; }
 .stTabs [data-baseweb="tab"] { color: var(--textsoft) !important; border-radius: 7px !important; font-size: 13px !important; font-weight: 600 !important; }
 .stTabs [aria-selected="true"] { background: rgba(61,214,140,.15) !important; color: var(--accent) !important; }
 .desc-text { font-size: 13px; color: var(--textsoft); margin-bottom: 1rem; line-height: 1.5; }
+.guide-box { background: rgba(96,165,250,0.05); border-left: 4px solid #60A5FA; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 13px; line-height: 1.6;}
+.guide-box strong { color: #60A5FA; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -86,6 +88,15 @@ def get_pulau(prov):
     for pulau, provs in PULAU_MAP.items():
         if prov in provs: return pulau
     return 'Lainnya'
+
+# Fungsi untuk menghitung Shannon Entropy dari return harga
+def calc_shannon_entropy(series, bins=10):
+    returns = series.pct_change().dropna()
+    if len(returns) == 0: return 0
+    counts, _ = np.histogram(returns, bins=bins)
+    probs = counts / sum(counts)
+    probs = probs[probs > 0] # hindari log(0)
+    return -np.sum(probs * np.log2(probs))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DATA LOADING
@@ -152,7 +163,6 @@ st.markdown(f"""
 
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
-    # DEFAULT DIUBAH KE "Semua Data"
     rentang = st.selectbox("📅 Rentang Waktu", ["Semua Data", "1 Tahun Terakhir", "6 Bulan Terakhir", "3 Bulan Terakhir"], index=0)
     days = {"3 Bulan Terakhir": 90, "6 Bulan Terakhir": 180, "1 Tahun Terakhir": 365, "Semua Data": None}[rentang]
     d_start = df_full['Tanggal'].min() if days is None else max(latest_date - pd.Timedelta(days=days), df_full['Tanggal'].min())
@@ -169,7 +179,7 @@ with col3:
     else:
         all_islands = sorted(df_full['Pulau'].unique())
         all_islands = [i for i in all_islands if i != 'Lainnya']
-        default_islands = all_islands # Pilih semua pulau secara default
+        default_islands = all_islands
         selected_regs = st.multiselect("🏝️ Pilih Pulau untuk Dianalisis", all_islands, default=default_islands)
 
 # Persiapan Data Scope Berdasarkan Pilihan (Untuk kalkulasi dinamis)
@@ -211,23 +221,32 @@ PALETTE = ['#F0B429', '#60A5FA', '#F472B6', '#A78BFA', '#FB923C', '#22D3EE', '#4
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS UNTUK SEMUA ANALISIS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_utama, tab_disparitas, tab_dekomposisi, tab_volatilitas, tab_klaster, tab_anomali, tab_spasial = st.tabs([
+tab_utama, tab_disparitas, tab_dekomposisi, tab_volatilitas, tab_klaster, tab_anomali, tab_spasial, tab_entropi = st.tabs([
     "📈 Tren & Komparasi",
     "📐 Disparitas & Distribusi",
     "1️⃣ Dekomposisi Musiman",
     "4️⃣ Volatilitas & Risiko",
-    "7️⃣ Klasterisasi (K-Means)",
+    "7️⃣ Klasterisasi Pasar",
     "🔟 Deteksi Anomali",
-    "12️⃣ Spasial & Korelasi"
+    "12️⃣ Spasial & Korelasi",
+    "🧠 Kompleksitas (Entropi)"
 ])
 
 # =============================================================================
 # TAB 0: TREN & KOMPARASI
 # =============================================================================
 with tab_utama:
+    with st.expander("📖 Panduan & Interpretasi Analisis", expanded=False):
+        st.markdown("""
+        <div class='guide-box'>
+            <strong>Apa itu:</strong> Visualisasi garis waktu pergerakan harga aktual daging ayam ras.<br>
+            <strong>Tujuan:</strong> Memantau pergerakan, membandingkan tren antar wilayah, dan melihat posisi relatif suatu wilayah terhadap rata-rata Nasional.<br>
+            <strong>Cara Baca:</strong> Sumbu horizontal menunjukkan waktu, sumbu vertikal menunjukkan harga dalam Rupiah. Area berwarna hijau muda adalah rata-rata Nasional.<br>
+            <strong>Interpretasi:</strong> Jika garis suatu wilayah berada di atas area hijau, berarti wilayah tersebut mengalami harga di atas kewajaran nasional (relatif mahal). Tren menanjak mengindikasikan inflasi atau pengetatan pasokan.
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown(f"### Pergerakan Harga Aktual ({compare_mode})")
-    st.markdown("<div class='desc-text'>Menampilkan perbandingan harga aktual secara real-time antara wilayah/pulau yang dipilih beserta garis referensi rata-rata Nasional.</div>", unsafe_allow_html=True)
     
     fig1 = go.Figure()
     y_mins, y_maxs = [nat_avg.min()], [nat_avg.max()]
@@ -239,7 +258,7 @@ with tab_utama:
         prefix = "📍" if compare_mode == "Per Provinsi" else "🏝️"
         fig1.add_trace(go.Scatter(x=series.index, y=series.values, name=f"{prefix} {name}", line=dict(color=PALETTE[i % len(PALETTE)], width=1.5), hovertemplate=f'<b>{name}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'))
 
-    fig1 = apply_beautiful_layout(fig1, f"Komparasi Pergerakan Harga")
+    fig1 = apply_beautiful_layout(fig1, f"Komparasi Pergerakan Harga ({compare_mode})")
     
     y_min_total, y_max_total = min(y_mins), max(y_maxs)
     padding = (y_max_total - y_min_total) * 0.05
@@ -251,19 +270,24 @@ with tab_utama:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 1: DISPARITAS & DISTRIBUSI (DIKEMBALIKAN & DIMAKSIMALKAN)
+# TAB 1: DISPARITAS & DISTRIBUSI
 # =============================================================================
 with tab_disparitas:
+    with st.expander("📖 Panduan & Interpretasi Analisis", expanded=False):
+        st.markdown("""
+        <div class='guide-box'>
+            <strong>Apa itu:</strong> Pengukuran kesenjangan harga menggunakan nilai "Gap" (selisih Termahal - Termurah) dan "Indeks Gini".<br>
+            <strong>Tujuan:</strong> Menilai seberapa merata harga di berbagai wilayah. Ketimpangan tinggi menandakan adanya kendala distribusi atau isolasi pasar.<br>
+            <strong>Cara Baca:</strong> Grafik area (kuning) menunjukkan nilai Gap dalam Rupiah. Grafik bar (ungu) adalah Indeks Gini (skala 0 sampai 1).<br>
+            <strong>Interpretasi:</strong> Gap yang terus membesar atau Indeks Gini yang tinggi (>0.3) mengindikasikan pasar yang tidak sehat karena perbedaan harga yang sangat ekstrim antar daerah.
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown(f"### Kesenjangan Harga Antar {compare_mode.split(' ')[1]}")
-    st.markdown(f"<div class='desc-text'>Melacak rentang selisih (Gap) antara harga tertinggi dan terendah khusus untuk <b>{', '.join(selected_regs)}</b>. Disparitas yang melebar menunjukkan ketidakmerataan pasokan atau respon pasar yang asimetris di area terpilih.</div>", unsafe_allow_html=True)
-    
     if not df_scope.empty and len(selected_regs) >= 2:
-        # Hitung Disparitas Dinamis (Hanya wilayah yang di-select)
         disp_daily = df_scope.groupby('Tanggal')['Harga'].agg(['max', 'min']).reset_index()
         disp_daily['Gap'] = disp_daily['max'] - disp_daily['min']
         
-        # Hitung Gini Dinamis
         def gini(arr):
             a = np.sort(np.abs(arr)); n = len(a)
             if n == 0 or a.mean() == 0: return 0
@@ -275,16 +299,8 @@ with tab_disparitas:
         
         with col_d1:
             fig_disp = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.65,0.35], vertical_spacing=0.06)
-            fig_disp.add_trace(go.Scatter(
-                x=disp_daily['Tanggal'], y=disp_daily['Gap'], name='Gap Harga (Max-Min)',
-                fill='tozeroy', fillcolor='rgba(240, 180, 41, 0.1)', line=dict(color='#F0B429', width=2),
-                hovertemplate='Gap Harga: Rp %{y:,.0f}<extra></extra>'
-            ), row=1, col=1)
-            
-            fig_disp.add_trace(go.Bar(
-                x=gini_daily['Tanggal'], y=gini_daily['Harga'], name='Indeks Gini',
-                marker_color='rgba(167,139,250,0.6)', hovertemplate='Gini: %{y:.4f}<extra></extra>'
-            ), row=2, col=1)
+            fig_disp.add_trace(go.Scatter(x=disp_daily['Tanggal'], y=disp_daily['Gap'], name='Gap Harga (Max-Min)', fill='tozeroy', fillcolor='rgba(240, 180, 41, 0.1)', line=dict(color='#F0B429', width=2), hovertemplate='Gap Harga: Rp %{y:,.0f}<extra></extra>'), row=1, col=1)
+            fig_disp.add_trace(go.Bar(x=gini_daily['Tanggal'], y=gini_daily['Harga'], name='Indeks Gini', marker_color='rgba(167,139,250,0.6)', hovertemplate='Gini: %{y:.4f}<extra></extra>'), row=2, col=1)
             
             fig_disp = apply_beautiful_layout(fig_disp, f"Tren Disparitas (Spesifik: {compare_mode.split(' ')[1]} Terpilih)")
             fig_disp.update_layout(height=450, showlegend=False, yaxis=dict(title="Gap Harga (Rp)", tickformat=",.0f"), yaxis2=dict(title="Indeks Gini"))
@@ -306,27 +322,32 @@ with tab_disparitas:
 # TAB 2: DEKOMPOSISI MUSIMAN
 # =============================================================================
 with tab_dekomposisi:
+    with st.expander("📖 Panduan & Interpretasi Analisis", expanded=False):
+        st.markdown("""
+        <div class='guide-box'>
+            <strong>Apa itu:</strong> Model statistik yang membedah struktur time series menjadi tiga komponen terpisah menggunakan <i>Multiplicative Decomposition</i>.<br>
+            <strong>Tujuan:</strong> Mengungkap tren mendasar tanpa gangguan fluktuasi harian, serta mendeteksi adanya siklus (musiman) pada komoditas ayam ras.<br>
+            <strong>Cara Baca:</strong><br>
+            1. <b>Trend:</b> Garis kuning, menunjukkan arah pergerakan murni jangka panjang.<br>
+            2. <b>Musiman (Seasonal):</b> Gelombang biru, menunjukkan pola berulang (misal mingguan/bulanan).<br>
+            3. <b>Residual:</b> Bar merah, menunjukkan kejadian acak (anomali) yang tidak bisa dijelaskan oleh tren maupun musim.<br>
+            <strong>Interpretasi:</strong> Jika Trend naik tajam, terjadi inflasi sistemik. Jika Residual tiba-tiba menjulang tinggi, berarti terjadi kejutan pasar (misal: panik beli akibat isu tertentu).
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### Dekomposisi Tren dan Musiman")
-    st.markdown("<div class='desc-text'>Membedah struktur harga menjadi tiga komponen: <b>Trend</b> (arah jangka panjang), <b>Seasonal</b> (pola siklus berulang), dan <b>Residual</b> (anomali acak).</div>", unsafe_allow_html=True)
-    
     if HAS_STATSMODELS:
-        # Default pilihan dropdown ke wilayah pertama yang dipilih, jika tidak ada, fallback ke Nasional
         default_target = selected_regs[0] if selected_regs else "Nasional"
         target_options = ["Nasional"] + list(plot_data.keys())
         target_decomp = st.selectbox("Pilih Target untuk Didekomposisi:", target_options, index=target_options.index(default_target) if default_target in target_options else 0)
         
         series_to_decomp = nat_avg if target_decomp == "Nasional" else plot_data[target_decomp]
-        
-        # FIX PANDAS DEPRECATION: gunakan .ffill()
         series_weekly = series_to_decomp.resample('W').mean().ffill()
         
         if len(series_weekly) > 10:
             result = seasonal_decompose(series_weekly, model='multiplicative', period=4)
             
-            fig_decomp = make_subplots(rows=4, cols=1, shared_xaxes=True, 
-                                       subplot_titles=(f"Harga Aktual ({target_decomp})", "Trend Fundamental", "Pola Musiman", "Residual (Acak)"),
-                                       vertical_spacing=0.06)
+            fig_decomp = make_subplots(rows=4, cols=1, shared_xaxes=True, subplot_titles=(f"Harga Aktual ({target_decomp})", "Trend Fundamental", "Pola Musiman", "Residual (Acak)"), vertical_spacing=0.06)
             
             fig_decomp.add_trace(go.Scatter(x=result.observed.index, y=result.observed, line=dict(color='#3DD68C')), row=1, col=1)
             fig_decomp.add_trace(go.Scatter(x=result.trend.index, y=result.trend, line=dict(color='#F0B429')), row=2, col=1)
@@ -338,48 +359,49 @@ with tab_dekomposisi:
             fig_decomp.update_yaxes(showgrid=True, gridcolor='#2A3142')
             st.plotly_chart(fig_decomp, use_container_width=True, config={'displayModeBar': False})
         else:
-            st.warning("Data tidak cukup panjang untuk melakukan dekomposisi. Silakan perluas rentang waktu (misal: Semua Data).")
+            st.warning("Data tidak cukup panjang untuk dekomposisi. Silakan pilih 'Semua Data'.")
     else:
-        st.error("Library `statsmodels` tidak terinstal di environment ini.")
+        st.error("Library `statsmodels` tidak terinstal.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
 # TAB 3: VOLATILITAS (GARCH / EWMA PROXY)
 # =============================================================================
 with tab_volatilitas:
+    with st.expander("📖 Panduan & Interpretasi Analisis", expanded=False):
+        st.markdown("""
+        <div class='guide-box'>
+            <strong>Apa itu:</strong> Estimasi tingkat gejolak pasar dengan metode <i>Exponentially Weighted Moving Average (EWMA)</i> dari Log Return, yang disetahunkan (Annualized Volatility).<br>
+            <strong>Tujuan:</strong> Mengukur risiko (<i>RiskMetrics</i>) akibat fluktuasi harga yang berubah-ubah secara ekstrem.<br>
+            <strong>Cara Baca:</strong> Sumbu vertikal adalah persentase Volatilitas. Garis putus-putus hijau adalah <i>baseline</i> volatilitas Nasional.<br>
+            <strong>Interpretasi:</strong> Lonjakan volatilitas menunjukkan pasar sedang dalam keadaan "panik" atau sangat tidak stabil. Wilayah dengan volatilitas yang konsisten tinggi berisiko merugikan peternak/konsumen akibat ketidakpastian. Peringkat di sebelah kanan (CV) menyoroti entitas paling berisiko secara keseluruhan.
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### Pengukuran Risiko dan Volatilitas Dinamis")
-    st.markdown(f"<div class='desc-text'>Memodelkan besaran fluktuasi menggunakan pendekatan <i>Exponentially Weighted Moving Average</i> (EWMA) dari Log Return. Semakin tinggi persentasenya, semakin bergejolak dan berisiko harga di <b>{compare_mode.split(' ')[1]}</b> tersebut.</div>", unsafe_allow_html=True)
-    
     col_v1, col_v2 = st.columns([2, 1])
     
     with col_v1:
         fig_vol = go.Figure()
-        
-        # Volatilitas Nasional sebagai baseline
         log_returns_nat = np.log(nat_avg / nat_avg.shift(1)).dropna()
         vol_nat = log_returns_nat.ewm(span=21).std() * np.sqrt(365) * 100
         fig_vol.add_trace(go.Scatter(x=vol_nat.index, y=vol_nat.values, name='Nasional', line=dict(color='#3DD68C', width=2, dash='dot'), hovertemplate='<b>Nasional</b><br>Volatilitas: %{y:.2f}%<extra></extra>'))
 
-        # Volatilitas Dinamis Sesuai Pilihan (Provinsi/Pulau)
         for i, (name, series) in enumerate(plot_data.items()):
             log_returns = np.log(series / series.shift(1)).dropna()
             vol = log_returns.ewm(span=21).std() * np.sqrt(365) * 100
             fig_vol.add_trace(go.Scatter(x=vol.index, y=vol.values, name=name, line=dict(color=PALETTE[i%len(PALETTE)], width=1.5), hovertemplate=f'<b>{name}</b><br>Volatilitas: %{{y:.2f}}%<extra></extra>'))
         
-        fig_vol = apply_beautiful_layout(fig_vol, "Tingkat Volatilitas Harga (Annualized %)")
+        fig_vol = apply_beautiful_layout(fig_vol, "Tingkat Volatilitas Harga Dinamis (Annualized %)")
         fig_vol.update_layout(height=450, yaxis=dict(title="Tingkat Gejolak (%)", ticksuffix="%"))
         st.plotly_chart(fig_vol, use_container_width=True, config={'displayModeBar': False})
         
     with col_v2:
         st.markdown("#### Peringkat Volatilitas (CV)")
-        st.markdown("<div class='desc-text' style='font-size:11px;'>Koefisien Variasi (CV) selama periode.</div>", unsafe_allow_html=True)
-        
-        # Bar Chart Volatilitas khusus yang dipilih
         if not df_scope.empty:
             vol_data = df_scope.groupby(entity_col)['Harga'].apply(lambda x: x.std() / x.mean() * 100).reset_index()
             vol_data.columns = [entity_col, 'CV']
-            vol_data = vol_data.sort_values('CV', ascending=True) # Ascending for horizontal bar
+            vol_data = vol_data.sort_values('CV', ascending=True)
             
             fig_cv = px.bar(vol_data, x='CV', y=entity_col, orientation='h', color='CV', color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'], text='CV')
             fig_cv.update_traces(texttemplate='%{text:.1f}%', textposition='outside', hovertemplate='<b>%{y}</b><br>CV: %{x:.2f}%<extra></extra>', marker_line_width=0)
@@ -389,29 +411,30 @@ with tab_volatilitas:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 3: KLASTERISASI PASAR (K-MEANS)
+# TAB 4: KLASTERISASI PASAR (K-MEANS)
 # =============================================================================
 with tab_klaster:
+    with st.expander("📖 Panduan & Interpretasi Analisis", expanded=False):
+        st.markdown("""
+        <div class='guide-box'>
+            <strong>Apa itu:</strong> Model <i>Machine Learning (Unsupervised)</i> yang secara otomatis mengelompokkan wilayah berdasarkan kemiripan <b>POLA</b> fluktuasi harganya, bukan harga nominalnya.<br>
+            <strong>Tujuan:</strong> Mencari daerah-daerah yang memiliki karakter pasar serupa atau terhubung erat dalam rantai pasok (meskipun lokasinya berjauhan).<br>
+            <strong>Cara Baca:</strong> Grafik menampilkan pergerakan "Pusat Klaster" (centroid). Di sisi kanan, Anda dapat melihat wilayah mana saja yang masuk ke klaster tersebut. Wilayah yang Anda pilih di menu atas akan disorot <b>tebal</b>.<br>
+            <strong>Interpretasi:</strong> Wilayah yang berada di klaster yang sama memiliki dinamika permintaan-penawaran yang sinkron. Kebijakan operasi pasar yang diterapkan pada satu anggota klaster biasanya akan berdampak serupa pada anggota lainnya di klaster yang sama.
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### Klasterisasi Karakteristik Pasar")
-    st.markdown(f"<div class='desc-text'>Menggunakan <i>Machine Learning</i> (K-Means) untuk secara otomatis mengelompokkan <b>seluruh entitas ({compare_mode})</b> di Indonesia berdasarkan kemiripan pola fluktuasi harganya. Entitas yang disorot tebal adalah pilihan Anda di menu atas.</div>", unsafe_allow_html=True)
-    
     if HAS_SKLEARN:
-        # Selalu hitung klaster untuk seluruh Indonesia agar akurat, lalu highlight yang dipilih
         entity_c = 'Wilayah' if compare_mode == "Per Provinsi" else 'Pulau'
-        
-        if compare_mode == "Per Pulau":
-            pivot_df = df_view.groupby(['Tanggal', 'Pulau'])['Harga'].mean().reset_index().pivot_table(index='Tanggal', columns='Pulau', values='Harga')
-        else:
-            pivot_df = df_view.pivot_table(index='Tanggal', columns='Wilayah', values='Harga')
+        if compare_mode == "Per Pulau": pivot_df = df_view.groupby(['Tanggal', 'Pulau'])['Harga'].mean().reset_index().pivot_table(index='Tanggal', columns='Pulau', values='Harga')
+        else: pivot_df = df_view.pivot_table(index='Tanggal', columns='Wilayah', values='Harga')
             
-        # FIX PANDAS DEPRECATION
         pivot_df = pivot_df.ffill().bfill().dropna(axis=1)
         
         if pivot_df.shape[1] >= 3:
             scaler = StandardScaler()
             scaled_data = scaler.fit_transform(pivot_df.T) 
-            
             n_clusters = max(2, min(3, pivot_df.shape[1] - 1))
             kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
             clusters = kmeans.fit_predict(scaled_data)
@@ -426,13 +449,9 @@ with tab_klaster:
                     cluster_avg_price = pivot_df[members].mean(axis=1)
                     
                     name_label = f"Cluster {c+1} ({len(members)} Anggota)"
-                    fig_km.add_trace(go.Scatter(
-                        x=cluster_avg_price.index, y=cluster_avg_price.values,
-                        name=name_label, line=dict(color=cluster_colors[c], width=3),
-                        hovertemplate=f"<b>{name_label}</b><br>Rp %{{y:,.0f}}<extra></extra>"
-                    ))
+                    fig_km.add_trace(go.Scatter(x=cluster_avg_price.index, y=cluster_avg_price.values, name=name_label, line=dict(color=cluster_colors[c], width=3), hovertemplate=f"<b>{name_label}</b><br>Rp %{{y:,.0f}}<extra></extra>"))
                 
-                fig_km = apply_beautiful_layout(fig_km, f"Rata-rata Harga Aktual per Klaster")
+                fig_km = apply_beautiful_layout(fig_km, f"Karakteristik Pola Harga per Klaster")
                 fig_km.update_layout(height=450)
                 st.plotly_chart(fig_km, use_container_width=True, config={'displayModeBar': False})
             
@@ -441,32 +460,34 @@ with tab_klaster:
                 for c in range(n_clusters):
                     members = cluster_map[cluster_map['Cluster'] == c]['Entitas'].tolist()
                     st.markdown(f"**<span style='color:{cluster_colors[c]}'>Cluster {c+1}</span>**", unsafe_allow_html=True)
-                    
-                    # Highlight entitas yang dipilih pengguna
                     formatted_members = [f"<b>{m}</b>" if m in selected_regs else m for m in members]
                     st.markdown(", ".join(formatted_members), unsafe_allow_html=True)
                     st.markdown("<hr style='margin:0.5rem 0; border-color:#2A3142;'>", unsafe_allow_html=True)
-        else:
-            st.warning("Data entitas tidak cukup untuk membentuk klaster yang bermakna.")
-    else:
-        st.error("Library `scikit-learn` tidak terinstal.")
+        else: st.warning("Data entitas tidak cukup untuk membentuk klaster yang bermakna.")
+    else: st.error("Library `scikit-learn` tidak terinstal.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 4: DETEKSI ANOMALI
+# TAB 5: DETEKSI ANOMALI
 # =============================================================================
 with tab_anomali:
+    with st.expander("📖 Panduan & Interpretasi Analisis", expanded=False):
+        st.markdown("""
+        <div class='guide-box'>
+            <strong>Apa itu:</strong> Model peringatan dini (<i>Early Warning System</i>) berbasis statistik Z-Score dengan <i>Rolling Window</i> 30 Hari.<br>
+            <strong>Tujuan:</strong> Mendeteksi titik harga harian yang lompatannya (spike) atau anjlokannya tidak masuk akal dan berada di luar kewajaran deviasi standar.<br>
+            <strong>Cara Baca:</strong> Garis tipis putus-putus adalah batas rata-rata kewajaran. Simbol <b>X warna merah</b> adalah titik waktu di mana harga dinyatakan sebagai "Anomali".<br>
+            <strong>Interpretasi:</strong> Semakin banyak tanda merah di suatu wilayah, semakin rentan wilayah tersebut terhadap *market shock* (seperti gagal panen, kelangkaan stok dadakan, atau aksi spekulan/kartel).
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown(f"### Deteksi Anomali Simultan ({compare_mode})")
-    st.markdown(f"<div class='desc-text'>Mendeteksi lonjakan (spikes) atau kejatuhan harga ekstrem yang menyimpang di luar kewajaran deviasi statistik secara bersamaan untuk <b>seluruh {compare_mode.split(' ')[1].lower()} yang Anda pilih</b>.</div>", unsafe_allow_html=True)
-    
     if not plot_data:
         st.info("Pilih wilayah/pulau terlebih dahulu.")
     else:
         fig_anom = go.Figure()
         anom_reports = []
         
-        # Loop semua region terpilih untuk dicari anomalinya
         for i, (name, series) in enumerate(plot_data.items()):
             window = 30
             rolling_mean = series.rolling(window=window, min_periods=5).mean()
@@ -477,84 +498,111 @@ with tab_anomali:
             anomalies = series[z_scores.abs() > threshold]
             
             line_color = PALETTE[i % len(PALETTE)]
-            
-            # Plot Garis Normal
             fig_anom.add_trace(go.Scatter(x=series.index, y=series.values, name=name, line=dict(color=line_color, width=1.5), opacity=0.7))
             
-            # Plot Titik Anomali
             if not anomalies.empty:
-                fig_anom.add_trace(go.Scatter(
-                    x=anomalies.index, y=anomalies.values, mode='markers', name=f'Anomali {name}',
-                    marker=dict(color='#F87171', size=10, symbol='circle', line=dict(width=2, color=line_color)),
-                    hovertemplate=f'<b>ANOMALI: {name}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'
-                ))
+                fig_anom.add_trace(go.Scatter(x=anomalies.index, y=anomalies.values, mode='markers', name=f'Anomali {name}', marker=dict(color='#F87171', size=10, symbol='circle', line=dict(width=2, color=line_color)), hovertemplate=f'<b>ANOMALI: {name}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'))
                 anom_reports.append(f"**{name}**: {len(anomalies)} kejadian.")
         
-        fig_anom = apply_beautiful_layout(fig_anom, f"Sebaran Anomali Harga Ekstrem")
+        fig_anom = apply_beautiful_layout(fig_anom, f"Visualisasi Serentak Anomali Harga Ekstrem")
         fig_anom.update_layout(height=500)
         st.plotly_chart(fig_anom, use_container_width=True, config={'displayModeBar': False})
         
-        if anom_reports:
-            st.error("⚠️ **Ringkasan Temuan Anomali:**\n\n" + "\n".join([f"- {r}" for r in anom_reports]))
-        else:
-            st.success("✅ Seluruh wilayah/pulau terpilih bergerak normal sesuai batas kewajaran statistik selama periode ini.")
+        if anom_reports: st.error("⚠️ **Ringkasan Temuan Anomali:**\n\n" + "\n".join([f"- {r}" for r in anom_reports]))
+        else: st.success("✅ Seluruh wilayah/pulau terpilih bergerak normal sesuai batas kewajaran statistik selama periode ini.")
             
     st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================================
-# TAB 5: SPASIAL & KORELASI ANTAR WILAYAH
+# TAB 6: SPASIAL & KORELASI
 # =============================================================================
 with tab_spasial:
+    with st.expander("📖 Panduan & Interpretasi Analisis", expanded=False):
+        st.markdown("""
+        <div class='guide-box'>
+            <strong>Apa itu:</strong> Pemetaan spasial dan perhitungan matriks Korelasi Pearson (r) yang mengukur kekuatan dan arah hubungan harga antar entitas.<br>
+            <strong>Tujuan:</strong> Mengetahui apakah kenaikan harga di satu provinsi akan merembet (<i>spillover effect</i>) atau menular ke provinsi lainnya.<br>
+            <strong>Cara Baca:</strong> Peta warna: Merah (Mahal) hingga Hijau (Murah). Heatmap: Nilai mendekati 1 (Hijau tua) berarti korelasi positif sempurna. Mendekati -1 (Merah tua) berarti korelasi negatif/berlawanan.<br>
+            <strong>Interpretasi:</strong> Dua wilayah dengan korelasi tinggi (>0.8) menandakan kedua pasar sangat terintegrasi. Jika satu wilayah mengalami inflasi daging ayam, dapat diprediksi kuat wilayah pasangannya akan segera menyusul naik.
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### Transmisi Harga & Peta Spasial")
-    st.markdown(f"<div class='desc-text'>Menganalisis sebaran harga riil di peta, dan mengukur matriks korelasi eksklusif antar-<b>{compare_mode.split(' ')[1].lower()} terpilih</b>. Semakin tinggi korelasi (hijau), semakin sinkron pergerakan harga.</div>", unsafe_allow_html=True)
-    
     col_s1, col_s2 = st.columns([1, 1])
     
     with col_s1:
-        st.markdown("#### Peta Sebaran Harga Terkini", unsafe_allow_html=True)
+        st.markdown("#### Peta Distribusi Geografis", unsafe_allow_html=True)
         df_latest = df_view[df_view['Tanggal'] == df_view['Tanggal'].max()]
-        
-        if compare_mode == "Per Provinsi":
-            df_map = df_latest[df_latest['Wilayah'].isin(selected_regs)]
-        else:
-            # Jika mode pulau, kita tetap plot provinsi-provinsi yang ada di pulau tersebut
-            df_map = df_latest[df_latest['Pulau'].isin(selected_regs)]
+        df_map = df_latest[df_latest['Wilayah'].isin(selected_regs)] if compare_mode == "Per Provinsi" else df_latest[df_latest['Pulau'].isin(selected_regs)]
             
         if not df_map.empty and 'Lat' in df_map.columns:
-            fig_map = px.scatter_mapbox(
-                df_map, lat="Lat", lon="Lon", color="Harga", size="Harga",
-                hover_name="Wilayah", hover_data={"Harga":":,.0f", "Pulau":True, "Lat":False, "Lon":False},
-                color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'],
-                size_max=25, zoom=3.5, mapbox_style="carto-darkmatter"
-            )
+            fig_map = px.scatter_mapbox(df_map, lat="Lat", lon="Lon", color="Harga", size="Harga", hover_name="Wilayah", hover_data={"Harga":":,.0f", "Pulau":True, "Lat":False, "Lon":False}, color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'], size_max=25, zoom=3.5, mapbox_style="carto-darkmatter")
             fig_map.update_layout(height=450, margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', coloraxis_colorbar=dict(title="Harga (Rp)", tickfont=dict(size=10)))
             st.plotly_chart(fig_map, use_container_width=True, config={'displayModeBar': False})
-        else:
-            st.info("Pilih wilayah/pulau untuk menampilkan peta.")
+        else: st.info("Data koordinat tidak ditemukan untuk visualisasi peta.")
             
     with col_s2:
-        st.markdown(f"#### Transmisi Harga antar {compare_mode.split(' ')[1]}", unsafe_allow_html=True)
+        st.markdown(f"#### Matriks Transmisi (Korelasi Harga)", unsafe_allow_html=True)
         if len(plot_data) >= 2:
             corr_df = pd.DataFrame(plot_data)
             corr_matrix = corr_df.corr()
             
-            fig_corr = go.Figure(go.Heatmap(
-                z=corr_matrix.values, x=corr_matrix.columns, y=corr_matrix.index,
-                colorscale=[[0,'#EF4444'],[0.5,'#1C232D'],[1,'#3DD68C']], zmin=-1, zmax=1,
-                text=np.round(corr_matrix.values, 2), texttemplate="%{text}", textfont=dict(size=11),
-                colorbar=dict(title='r', tickfont=dict(size=10)),
-                hovertemplate="%{y} ↔ %{x}<br>Korelasi: %{z:.2f}<extra></extra>"
-            ))
-            
-            fig_corr.update_layout(
-                height=450, margin=dict(l=10,r=10,t=10,b=50),
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(tickangle=-45, tickfont=dict(size=11, color='#9BAABD')),
-                yaxis=dict(tickfont=dict(size=11, color='#9BAABD'))
-            )
+            fig_corr = go.Figure(go.Heatmap(z=corr_matrix.values, x=corr_matrix.columns, y=corr_matrix.index, colorscale=[[0,'#EF4444'],[0.5,'#1C232D'],[1,'#3DD68C']], zmin=-1, zmax=1, text=np.round(corr_matrix.values, 2), texttemplate="%{text}", textfont=dict(size=11), colorbar=dict(title='r', tickfont=dict(size=10)), hovertemplate="%{y} ↔ %{x}<br>Korelasi: %{z:.2f}<extra></extra>"))
+            fig_corr.update_layout(height=450, margin=dict(l=10,r=10,t=10,b=50), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(tickangle=-45, tickfont=dict(size=11, color='#9BAABD')), yaxis=dict(tickfont=dict(size=11, color='#9BAABD')))
             st.plotly_chart(fig_corr, use_container_width=True, config={'displayModeBar': False})
-        else:
-            st.info(f"Pilih setidaknya 2 {compare_mode.split(' ')[1].lower()} untuk menghasilkan matriks korelasi.")
-    
+        else: st.info(f"Pilih setidaknya 2 {compare_mode.split(' ')[1].lower()} untuk menghasilkan matriks korelasi.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# =============================================================================
+# TAB 7: KOMPLEKSITAS (ENTROPI)
+# =============================================================================
+with tab_entropi:
+    with st.expander("📖 Panduan & Interpretasi Analisis", expanded=False):
+        st.markdown("""
+        <div class='guide-box'>
+            <strong>Apa itu:</strong> Model Teori Informasi (<i>Shannon Entropy</i>) yang diterapkan pada perubahan persentase harga harian (log returns).<br>
+            <strong>Tujuan:</strong> Mengukur tingkat "Keacakan", "Kompleksitas", atau seberapa sulit memprediksi pergerakan harga komoditas.<br>
+            <strong>Cara Baca:</strong> Nilai ditampilkan dalam satuan <i>bits</i>. Semakin panjang bar (nilai lebih tinggi), semakin tinggi kompleksitasnya.<br>
+            <strong>Interpretasi:</strong> 
+            <br>• <b>Entropi Tinggi:</b> Harga ayam bergerak sangat acak (menyebar rata), tidak membentuk pola statis, menandakan ketidakpastian (<i>uncertainty</i>) yang tinggi di pasar tersebut.
+            <br>• <b>Entropi Rendah:</b> Harga bergerak sangat monoton atau terpusat pada angka perubahan yang itu-itu saja (sangat mudah diprediksi). Pasar lebih pasti atau mungkin mengalami <i>price stickiness</i> (kekakuan harga).
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    if plot_data:
+        entropy_results = []
+        
+        # Hitung entropi untuk baseline Nasional
+        ent_nat = calc_shannon_entropy(nat_avg)
+        entropy_results.append({'Entitas': 'Nasional', 'Entropi (bits)': ent_nat, 'Warna': '#3DD68C'})
+        
+        # Hitung entropi untuk entitas terpilih
+        for i, (name, series) in enumerate(plot_data.items()):
+            ent_val = calc_shannon_entropy(series)
+            entropy_results.append({'Entitas': name, 'Entropi (bits)': ent_val, 'Warna': PALETTE[i % len(PALETTE)]})
+            
+        df_ent = pd.DataFrame(entropy_results).sort_values('Entropi (bits)', ascending=True)
+        
+        col_e1, col_e2 = st.columns([2, 1])
+        
+        with col_e1:
+            fig_ent = px.bar(df_ent, x='Entropi (bits)', y='Entitas', orientation='h', color='Entitas', color_discrete_map=dict(zip(df_ent['Entitas'], df_ent['Warna'])), text='Entropi (bits)')
+            fig_ent.update_traces(texttemplate='%{text:.3f} bits', textposition='outside', hovertemplate='<b>%{y}</b><br>Entropi: %{x:.3f} bits<extra></extra>', marker_line_width=0)
+            
+            fig_ent = apply_beautiful_layout(fig_ent, f"Tingkat Keacakan Pasar (Shannon Entropy)")
+            fig_ent.update_layout(height=450, showlegend=False, xaxis=dict(title="Tingkat Kompleksitas (bits) ➔ Makin Tinggi Makin Acak"), yaxis=dict(title="", tickfont=dict(size=12)))
+            
+            st.plotly_chart(fig_ent, use_container_width=True, config={'displayModeBar': False})
+            
+        with col_e2:
+            st.markdown("#### Wawasan Entropi")
+            max_ent = df_ent.iloc[-1]
+            min_ent = df_ent[df_ent['Entitas'] != 'Nasional'].iloc[0] if len(df_ent) > 1 else df_ent.iloc[0]
+            
+            st.info(f"**Paling Acak / Sulit Diprediksi:**\n\nPasar di **{max_ent['Entitas']}** memiliki entropi tertinggi ({max_ent['Entropi (bits)']:.3f} bits), menandakan rentang fluktuasi perubahan harga yang luas dan tidak berpola tetap.")
+            st.success(f"**Paling Teratur / Kaku:**\n\nPasar di **{min_ent['Entitas']}** memiliki entropi terendah ({min_ent['Entropi (bits)']:.3f} bits), menandakan harga cenderung diam, kaku, atau bergerak dalam pola yang mudah ditebak.")
+            
+    else:
+        st.info("Pilih wilayah/pulau terlebih dahulu untuk menganalisis entropi pasar.")
     st.markdown("</div>", unsafe_allow_html=True)
