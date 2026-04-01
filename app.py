@@ -138,6 +138,10 @@ st.markdown("<div class='card'>", unsafe_allow_html=True)
 nat_avg = df_view.groupby('Tanggal')['Harga'].mean()
 fig1 = go.Figure()
 
+# Hitung nilai minimum dan maksimum untuk memfokuskan Y-Axis
+y_mins = [nat_avg.min()]
+y_maxs = [nat_avg.max()]
+
 # Garis Nasional (Area Fill)
 fig1.add_trace(go.Scatter(
     x=nat_avg.index, y=nat_avg.values, name='🇮 Nasional (Rata-rata)',
@@ -150,6 +154,11 @@ fig1.add_trace(go.Scatter(
 palette = ['#F0B429', '#60A5FA', '#F472B6', '#A78BFA', '#FB923C']
 for i, reg in enumerate(selected_regs):
     df_reg = df_view[df_view['Wilayah'] == reg].sort_values('Tanggal')
+    
+    if not df_reg.empty:
+        y_mins.append(df_reg['Harga'].min())
+        y_maxs.append(df_reg['Harga'].max())
+        
     fig1.add_trace(go.Scatter(
         x=df_reg['Tanggal'], y=df_reg['Harga'], name=reg,
         line=dict(color=palette[i % len(palette)], width=1.5),
@@ -157,8 +166,16 @@ for i, reg in enumerate(selected_regs):
     ))
 
 fig1 = apply_beautiful_layout(fig1, "📈 Pergerakan Harga Sepanjang Waktu")
-# FIX: Berikan tinggi statis agar ruang pandang data lebih leluasa dan proporsional
+
+# Menentukan batas Y-Axis dinamis agar tidak mulai dari 0
+y_min_total = min(y_mins)
+y_max_total = max(y_maxs)
+padding = (y_max_total - y_min_total) * 0.05 # Memberikan ruang kosong 5% di atas dan bawah
+if padding == 0: padding = y_min_total * 0.05
+
+# FIX: Berikan tinggi statis dan fokuskan Y-Axis ke data terdekat (zoom in)
 fig1.update_layout(height=550) 
+fig1.update_yaxes(range=[y_min_total - padding, y_max_total + padding])
 
 st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 st.markdown("</div>", unsafe_allow_html=True)
