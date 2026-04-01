@@ -123,7 +123,8 @@ def apply_beautiful_layout(fig, title):
         font=dict(family='DM Sans', color='#9BAABD'),
         margin=dict(l=20, r=20, t=60, b=20),
         hovermode='x unified',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
+        # FIX: Pindahkan legend ke samping kanan (vertikal) agar tidak menekan chart ke bawah
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor='rgba(0,0,0,0)', font=dict(size=10)),
         xaxis=dict(showgrid=False, gridcolor='#2A3142', zeroline=False),
         yaxis=dict(showgrid=True, gridcolor='#2A3142', zeroline=False, tickformat=",.0f")
     )
@@ -156,6 +157,9 @@ for i, reg in enumerate(selected_regs):
     ))
 
 fig1 = apply_beautiful_layout(fig1, "📈 Pergerakan Harga Sepanjang Waktu")
+# FIX: Berikan tinggi statis agar ruang pandang data lebih leluasa dan proporsional
+fig1.update_layout(height=550) 
+
 st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 st.markdown("</div>", unsafe_allow_html=True)
 
