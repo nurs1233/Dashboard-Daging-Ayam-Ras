@@ -27,17 +27,16 @@ def load_single_file(filepath):
         
         # Baca file sesuai ekstensi
         if ext == '.csv':
-            # Coba deteksi header dengan membaca beberapa baris awal
-            df_test = pd.read_csv(filepath, nrows=10)
+            # TAMBAHKAN skip_blank_lines=False di sini
+            df_test = pd.read_csv(filepath, nrows=10, skip_blank_lines=False)
             skip_n = 0
             for i, row in df_test.iterrows():
                 if any(str(val).strip().lower() in ['wilayah', 'no', 'provinsi'] for val in row.values):
                     skip_n = i + 1
                     break
-            df = pd.read_csv(filepath, skiprows=skip_n if skip_n > 0 else 3)
-        else:
-            # Untuk Excel, biasanya metadata ada di 3-5 baris pertama
-            df = pd.read_excel(filepath, skiprows=3)
+            
+            # Sangat disarankan untuk menambahkannya di baris ini juga
+            df = pd.read_csv(filepath, skiprows=skip_n if skip_n > 0 else 3, skip_blank_lines=False)
 
         # Cari kolom Wilayah/Provinsi
         if 'Wilayah' not in df.columns:
