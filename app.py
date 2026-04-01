@@ -4,10 +4,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
 import os
-from data_loader import load_all_data
-
-# --- SETUP PATH ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -100,15 +96,98 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- PEMUATAN DATA ---
+# --- FUNGSI PEMUATAN DATA (MENGGANTIKAN DATA_LOADER.PY) ---
 @st.cache_data
-def get_data():
-    return load_all_data(BASE_DIR)
+def load_all_data():
+    """
+    Mencari seluruh file CSV/XLSX di dalam root aplikasi dan sub-foldernya.
+    Logika unpivoting (melt) dan pembersihan disertakan di sini.
+    """
+    base_search_path = "."
+    
+    # 1. Cari semua file CSV dan XLSX
+    files = []
+    for root, dirs, filenames in os.walk(base_search_path):
+        # Abaikan folder sistem untuk mempercepat proses
+        if '/.' in root or '\\.' in root or 'venv' in root or '__pycache__' in root:
+            continue
+        for f in filenames:
+            if f.endswith('.csv') or f.endswith('.xlsx'):
+                files.append(os.path.join(root, f))
+    
+    if not files:
+        raise FileNotFoundError(f"TIDAK ADA file .xlsx atau .csv ditemukan di direktori aplikasi!")
 
-df_full = get_data()
+    all_data = []
+    for file in files:
+        try:
+            # Skip 3 baris metadata
+            if file.endswith('.csv'):
+                df = pd.read_csv(file, skiprows=3)
+            else:
+                df = pd.read_excel(file, skiprows=3)
+        except Exception:
+            continue
+
+        if df.empty:
+            continue
+
+        # Deteksi kolom 'Wilayah'
+        if 'Wilayah' not in df.columns:
+            wilayah_col = [c for c in df.columns if 'wilayah' in str(c).lower()]
+            if wilayah_col:
+                df = df.rename(columns={wilayah_col[0]: 'Wilayah'})
+            else:
+                continue
+
+        # Cleansing baris non-data ("Sumber Data : SP2KP...")
+        df = df.dropna(subset=['Wilayah'])
+        df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data', case=False, na=False)]
+        
+        # Melt data: Wide (tanggal di kolom) -> Long (tanggal jadi baris)
+        date_columns = [col for col in df.columns if col != 'Wilayah' and not str(col).startswith('Unnamed')]
+        df_melted = pd.melt(
+            df, id_vars=['Wilayah'], value_vars=date_columns, 
+            var_name='Tanggal', value_name='Harga'
+        )
+
+        # Standardisasi data
+        df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
+        if df_melted['Harga'].dtype == 'object':
+            df_melted['Harga'] = df_melted['Harga'].astype(str).str.replace(',', '').str.replace('.', '')
+            
+        df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
+        df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
+
+        # Buang baris invalid & harga 0
+        df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
+        df_melted = df_melted[df_melted['Harga'] > 0]
+        
+        if not df_melted.empty:
+            all_data.append(df_melted)
+
+    if not all_data:
+        raise ValueError("File ditemukan, tapi tidak ada data yang valid untuk dibaca (Mungkin format kolom berbeda).")
+
+    combined_df = pd.concat(all_data, ignore_index=True)
+    
+    # Injeksi kolom Lat/Lon kosong untuk mencegah error Peta di bawah
+    if 'Lat' not in combined_df.columns:
+        combined_df['Lat'] = None
+    if 'Lon' not in combined_df.columns:
+        combined_df['Lon'] = None
+        
+    return combined_df
+
+# --- EKSEKUSI PEMUATAN DATA ---
+try:
+    df_full = load_all_data()
+except Exception as e:
+    st.error(f"Terjadi kesalahan saat memuat data: {e}")
+    st.stop()
 
 if df_full.empty:
-    st.error("Data tidak ditemukan! Pastikan folder `Data` berisi file `.xlsx` atau `.csv` yang valid.")
+    st.error("Data berhasil dibaca tetapi hasilnya kosong.")
     st.stop()
 
 # --- SIDEBAR ---
@@ -118,7 +197,15 @@ with st.sidebar:
     max_d = df_full['Tanggal'].max().date()
     min_d = df_full['Tanggal'].min().date()
     
-    date_range = st.date_input("Timeframe", value=(max_d - timedelta(days=30), max_d), min_value=min_d, max_value=max_d)
+    # Pencegahan jika min dan max date sama
+    if max_d == min_d:
+        default_start = min_d
+    else:
+        default_start = max_d - timedelta(days=30)
+        if default_start < min_d:
+            default_start = min_d
+            
+    date_range = st.date_input("Timeframe", value=(default_start, max_d), min_value=min_d, max_value=max_d)
     threshold = st.slider("Batas Waspada (Rp)", 25000, 60000, 40000)
     
     all_regs = sorted(df_full['Wilayah'].unique())
@@ -157,7 +244,6 @@ with col_head1:
     """, unsafe_allow_html=True)
 with col_head2:
     st.markdown("<br>", unsafe_allow_html=True)
-    # Placeholder for export buttons
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -226,7 +312,7 @@ with c1:
     # Wilayah Terpilih
     colors = ['#012D1D', '#16A34A', '#BA1A1A', '#EA9147']
     if selected_regions:
-        for i, r in enumerate(selected_regions[:4]): # Limit to 4 for clean look
+        for i, r in enumerate(selected_regions[:4]):
             rd = df[df['Wilayah']==r]
             fig1.add_trace(go.Scatter(x=rd['Tanggal'], y=rd['Harga'], name=r, line=dict(color=colors[i%len(colors)], width=2.5)))
             
@@ -261,7 +347,7 @@ with c3:
         fig_map.update_layout(height=300, margin=dict(l=0,r=0,t=0,b=0), coloraxis_showscale=False)
         st.plotly_chart(fig_map, use_container_width=True)
     else:
-        st.info("Data koordinat belum tersedia.")
+        st.info("Data koordinat (Lat/Lon) belum tersedia di dalam data Anda untuk menampilkan peta.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 with c4:
@@ -297,6 +383,6 @@ st.markdown("</div>", unsafe_allow_html=True)
 st.markdown("""
 <div style='text-align: center; margin-top: 3rem; padding-bottom: 2rem;'>
     <h4 style='color: #012D1D; font-weight: 800; font-size: 14px; margin:0;'>Dashboard Harga Daging Ayam Ras</h4>
-    <p style='color: #717973; font-size: 12px; margin-top: 4px;'>Data sourced from Sistem Pemantauan Pasar dan Kebutuhan Pokok (SP2KP). © 2024 Agrarian Intelligence.</p>
+    <p style='color: #717973; font-size: 12px; margin-top: 4px;'>Data sourced from Sistem Pemantauan Pasar dan Kebutuhan Pokok (SP2KP). © 2026 Agrarian Intelligence.</p>
 </div>
 """, unsafe_allow_html=True)
