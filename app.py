@@ -204,7 +204,7 @@ div[data-testid="stDataFrame"] {
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLOTLY THEME DEFAULTS - FIXED
+# PLOTLY THEME DEFAULTS
 # ─────────────────────────────────────────────────────────────────────────────
 PLOTLY_BASE = dict(
     paper_bgcolor='rgba(0,0,0,0)', 
@@ -241,7 +241,6 @@ PLOTLY_BASE = dict(
 )
 PALETTE = ['#3DD68C','#F0B429','#60A5FA','#F472B6','#A78BFA','#FB923C','#22D3EE','#FBBF24']
 
-# HELPER FUNCTION UNTUK MENGHINDARI TYPEERROR: multiple values for keyword argument
 def get_base_layout(*exclude_keys):
     """Mengembalikan PLOTLY_BASE tanpa key yang ada di exclude_keys."""
     return {k: v for k, v in PLOTLY_BASE.items() if k not in exclude_keys}
@@ -303,7 +302,7 @@ def holidays_in_range(start, end):
     return result
 
 # ─────────────────────────────────────────────────────────────────────────────
-# KOORDINAT PROVINSI
+# KOORDINAT PROVINSI & MAP PULAU
 # ─────────────────────────────────────────────────────────────────────────────
 KOORDINAT = {
     'DKI Jakarta':(-6.2088,106.8456),'Jawa Barat':(-6.9175,107.6191),
@@ -450,26 +449,27 @@ with st.sidebar:
 
     all_dates_min = df_full['Tanggal'].min().date()
     all_dates_max = df_full['Tanggal'].max().date()
-    default_start = max(all_dates_max - timedelta(days=180), all_dates_min)
 
-    if 'd_start' not in st.session_state: st.session_state.d_start = default_start
-    if 'd_end' not in st.session_state: st.session_state.d_end = all_dates_max
+    # Fungsi untuk mengubah range waktu melalui button
+    def set_dates(days=None):
+        if days is None:
+            st.session_state.d_picker = (all_dates_min, all_dates_max)
+        else:
+            d_start = max(all_dates_max - timedelta(days=days), all_dates_min)
+            st.session_state.d_picker = (d_start, all_dates_max)
 
-    def set_dates(days):
-        st.session_state.d_start = max(all_dates_max - timedelta(days=days), all_dates_min)
-        st.session_state.d_end = all_dates_max
-        st.session_state.d_picker = (st.session_state.d_start, st.session_state.d_end)
+    # Inisialisasi default TANGGAL: MAKSIMAL DATA (Semua Waktu)
+    if 'd_picker' not in st.session_state:
+        st.session_state.d_picker = (all_dates_min, all_dates_max)
 
     st.markdown("<div style='font-size:10px;color:#6B7A8D;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;'>📅 Rentang Waktu</div>", unsafe_allow_html=True)
     
-    cd1, cd2, cd3, cd4 = st.columns(4)
-    cd1.button("1B", on_click=set_dates, args=(30,), use_container_width=True)
-    cd2.button("3B", on_click=set_dates, args=(90,), use_container_width=True)
-    cd3.button("6B", on_click=set_dates, args=(180,), use_container_width=True)
-    cd4.button("1T", on_click=set_dates, args=(365,), use_container_width=True)
-
-    if 'd_picker' not in st.session_state:
-        st.session_state.d_picker = (st.session_state.d_start, st.session_state.d_end)
+    cd1, cd2, cd3, cd4, cd5 = st.columns(5)
+    cd1.button("1B", on_click=set_dates, args=(30,), use_container_width=True, help="1 Bulan Terakhir")
+    cd2.button("3B", on_click=set_dates, args=(90,), use_container_width=True, help="3 Bulan Terakhir")
+    cd3.button("6B", on_click=set_dates, args=(180,), use_container_width=True, help="6 Bulan Terakhir")
+    cd4.button("1T", on_click=set_dates, args=(365,), use_container_width=True, help="1 Tahun Terakhir")
+    cd5.button("Semua", on_click=set_dates, args=(None,), use_container_width=True, help="Tampilkan Seluruh Data")
 
     date_range = st.date_input("", key='d_picker', min_value=all_dates_min, max_value=all_dates_max, label_visibility="collapsed")
 
@@ -477,9 +477,13 @@ with st.sidebar:
 
     all_regions = sorted(df_full['Wilayah'].unique())
 
+    # Inisialisasi default PROVINSI: SEMUA PROVINSI
+    if 'sel_regions' not in st.session_state:
+        st.session_state.sel_regions = all_regions
+
     st.markdown("<div style='font-size:10px;color:#6B7A8D;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;'>🌏 Pilih Pulau / Wilayah</div>", unsafe_allow_html=True)
 
-    pulau_opts = ["-- Kustom Wilayah --", "Semua Provinsi", "Pulau Sumatera", "Pulau Jawa", "Pulau Kalimantan", "Pulau Sulawesi", "Bali & Nusa Tenggara", "Maluku & Papua"]
+    pulau_opts = ["Semua Provinsi", "Pulau Sumatera", "Pulau Jawa", "Pulau Kalimantan", "Pulau Sulawesi", "Bali & Nusa Tenggara", "Maluku & Papua", "-- Kustom Wilayah --"]
 
     def on_pulau_change():
         p = st.session_state.pulau_sel
@@ -490,12 +494,9 @@ with st.sidebar:
         elif p == "Pulau Sulawesi": st.session_state.sel_regions = [r for r in PULAU_MAP['Sulawesi'] if r in all_regions]
         elif p == "Bali & Nusa Tenggara": st.session_state.sel_regions = [r for r in PULAU_MAP['Bali & Nusa Tenggara'] if r in all_regions]
         elif p == "Maluku & Papua": st.session_state.sel_regions = [r for r in PULAU_MAP['Maluku & Papua'] if r in all_regions]
+        # Jika kustom, kita biarkan state multiselect mengaturnya
 
     st.selectbox("Filter Cepat Pulau", pulau_opts, key='pulau_sel', on_change=on_pulau_change, label_visibility="collapsed")
-
-    DEFAULT_SEL = [r for r in ['DKI Jakarta','Jawa Barat','Jawa Timur','Sumatera Utara','Sulawesi Selatan'] if r in all_regions] or all_regions[:5]
-    if 'sel_regions' not in st.session_state:
-        st.session_state.sel_regions = DEFAULT_SEL
 
     selected_regions = st.multiselect(
         "Provinsi Terpilih", all_regions, key="sel_regions", label_visibility="collapsed")
@@ -529,11 +530,15 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────────────
 # FILTER DATA
 # ─────────────────────────────────────────────────────────────────────────────
-if len(date_range) == 2:
+# Pastikan filter tanggal robust jika pengguna memilih satu tanggal saja
+if isinstance(date_range, tuple) and len(date_range) == 2:
     d_start = pd.Timestamp(date_range[0])
     d_end   = pd.Timestamp(date_range[1])
-else:
+elif isinstance(date_range, tuple) and len(date_range) == 1:
     d_start = pd.Timestamp(date_range[0])
+    d_end   = pd.Timestamp(all_dates_max)
+else:
+    d_start = pd.Timestamp(date_range) if date_range else pd.Timestamp(all_dates_min)
     d_end   = pd.Timestamp(all_dates_max)
 
 df_view = df_full[(df_full['Tanggal'] >= d_start) & (df_full['Tanggal'] <= d_end)].copy()
@@ -678,7 +683,8 @@ with tab_trend:
                 line=dict(color='rgba(240,180,41,0.5)', width=1, dash=dash),
                 hovertemplate=f'{name}: Rp %{{y:,.0f}}<extra></extra>'))
 
-    for i, reg in enumerate(regions_to_plot[:8]):
+    # MENGHAPUS LIMITASI [:8], Menampilkan semua region yang diminta
+    for i, reg in enumerate(regions_to_plot):
         rd = df_full[df_full['Wilayah']==reg].set_index('Tanggal')['Harga'].sort_index()
         rd_v = rd[(rd.index >= d_start) & (rd.index <= d_end)]
         if rd_v.empty: continue
@@ -736,7 +742,7 @@ with tab_trend:
                 textangle=-90, xanchor='right', bgcolor='rgba(96,165,250,0.08)', borderpad=3)
 
     fig.update_layout(
-        height=430,
+        height=480, # Ditingkatkan ketinggiannya agar garis yang banyak tetap nyaman dilihat
         hovermode='x unified', 
         dragmode='zoom',
         paper_bgcolor=PLOTLY_BASE['paper_bgcolor'],
@@ -776,13 +782,12 @@ with tab_trend:
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-head'><h3>Tren Harga Interaktif</h3><span class='tag'>Scroll = zoom · Drag = pan · Double-click = reset</span></div>", unsafe_allow_html=True)
-    # ✅ FIX: use_container_width
     st.plotly_chart(fig, use_container_width=True,
                     config={'scrollZoom':True,'displayModeBar':True,'modeBarButtonsToAdd':['drawline','eraseshape']})
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — DISPARITAS & KORELASI (PART 1)
+# TAB 2 — DISPARITAS & KORELASI
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_disp_corr:
     st.markdown("""
@@ -828,7 +833,6 @@ with tab_disp_corr:
             marker_color='rgba(167,139,250,0.6)',
             hovertemplate='%{x|%d %b %Y}<br>Gini: %{y:.4f}<extra></extra>'), row=2, col=1)
 
-        # ✅ FIX: Menggunakan get_base_layout untuk menghindari duplikat keyword arguments
         fig_disp.update_layout(
             **get_base_layout('yaxis', 'yaxis2', 'legend'),
             height=380,
@@ -852,7 +856,6 @@ with tab_disp_corr:
             texttemplate='Rp %{text:,}', textfont=dict(size=9),
             hovertemplate='%{y}<br>Std Dev: Rp %{x:,.0f}<extra></extra>'))
         
-        # ✅ FIX: Menggunakan get_base_layout
         fig_std.update_layout(
             **get_base_layout('xaxis', 'yaxis', 'margin'),
             height=380,
@@ -872,7 +875,8 @@ with tab_disp_corr:
         st.markdown("<div class='section-head'><h3>Indeks Disparitas per Wilayah</h3><span class='tag'>(Harga/SMA20 − 1) × 100</span></div>", unsafe_allow_html=True)
 
         fig_di = go.Figure()
-        for i, reg in enumerate(selected_regions[:6]):
+        # MENGHAPUS LIMITASI [:6], Menampilkan semua region yang diminta
+        for i, reg in enumerate(selected_regions):
             rd = df_full[df_full['Wilayah']==reg].set_index('Tanggal')['Harga'].sort_index()
             di = disparity_index(rd, w=20)
             di_v = di[(di.index >= d_start) & (di.index <= d_end)]
@@ -884,16 +888,108 @@ with tab_disp_corr:
 
         fig_di.add_hline(y=0, line=dict(color='rgba(255,255,255,0.2)', width=1))
         
-        # ✅ FIX: Menggunakan get_base_layout
         fig_di.update_layout(
             **get_base_layout('xaxis', 'yaxis'),
-            height=300,
+            height=400, # Ketinggian ditambah agar legenda yang banyak tetap rapih
             yaxis=dict(**PLOTLY_BASE['yaxis'], title='Indeks Disparitas (%)', ticksuffix='%'),
             xaxis=dict(**PLOTLY_BASE['xaxis']),
             hovermode='x unified'
         )
         st.plotly_chart(fig_di, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # ════════ PART 2 — KORELASI ════════
+    st.markdown("<div class='hdiv'></div>", unsafe_allow_html=True)
+    
+    pivot = df_full.pivot_table(index='Tanggal', columns='Wilayah', values='Harga', aggfunc='mean')
+    pivot_v = pivot[(pivot.index >= d_start) & (pivot.index <= d_end)]
+
+    if pivot_v.shape[1] >= 2 and not pivot_v.empty:
+        corr = pivot_v.corr(method='pearson')
+
+        completeness = pivot_v.notna().sum().sort_values(ascending=False)
+        # Tampilkan hingga 38 Provinsi (Maksimal Semua) agar Tidak Ada Batas
+        top_provs = completeness.head(40).index.tolist()
+        corr_sub  = corr.loc[top_provs, top_provs]
+
+        corr_col1, corr_col2 = st.columns([2,1])
+
+        with corr_col1:
+            mask_vals = np.round(corr_sub.values, 2)
+            text_vals = [[f"{v:.2f}" for v in row] for row in mask_vals]
+            fig_corr = go.Figure(go.Heatmap(
+                z=corr_sub.values, x=corr_sub.columns, y=corr_sub.index,
+                colorscale=[[0,'#EF4444'],[0.5,'#1C232D'],[1,'#3DD68C']],
+                zmin=-1, zmax=1,
+                # text=text_vals, texttemplate="%{text}", # Di-disable untuk semua provinsi agar tidak bertumpuk / jelek
+                textfont=dict(size=7),
+                colorbar=dict(title='r', tickfont=dict(size=8)),
+                hovertemplate="%{y} ↔ %{x}<br>r = %{z:.3f}<extra></extra>"))
+            
+            fig_corr.update_layout(
+                **get_base_layout('xaxis', 'yaxis', 'margin'),
+                height=600, # Perbesar secara maksimal
+                xaxis=dict(tickangle=-45, tickfont=dict(size=8), showgrid=False),
+                yaxis=dict(tickfont=dict(size=8), showgrid=False),
+                margin=dict(l=10,r=10,t=10,b=80)
+            )
+
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.markdown("<div class='section-head'><h3>Matriks Korelasi Pearson (Seluruh Provinsi)</h3><span class='tag'>Hubungan pergerakan harga antar wilayah</span></div>", unsafe_allow_html=True)
+            st.plotly_chart(fig_corr, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with corr_col2:
+            pairs = [(corr_sub.index[i], corr_sub.columns[j], corr_sub.iloc[i,j])
+                     for i in range(len(corr_sub)) for j in range(i+1,len(corr_sub.columns))]
+            pairs_df = pd.DataFrame(pairs, columns=['Prov A','Prov B','r'])
+
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.markdown("<div class='section-head'><h3>5 Korelasi Tertinggi</h3></div>", unsafe_allow_html=True)
+            for _,row in pairs_df.nlargest(5,'r').iterrows():
+                st.markdown(f"""
+                <div style='display:flex;justify-content:space-between;padding:5px 0;
+                             border-bottom:1px solid #2A3142;font-size:12px;'>
+                    <span>{row['Prov A'][:14]} ↔ {row['Prov B'][:14]}</span>
+                    <span style='color:#3DD68C;font-family:"JetBrains Mono",monospace;'>{row['r']:.3f}</span>
+                </div>""", unsafe_allow_html=True)
+
+            st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-head'><h3>5 Korelasi Terendah</h3></div>", unsafe_allow_html=True)
+            for _,row in pairs_df.nsmallest(5,'r').iterrows():
+                st.markdown(f"""
+                <div style='display:flex;justify-content:space-between;padding:5px 0;
+                             border-bottom:1px solid #2A3142;font-size:12px;'>
+                    <span>{row['Prov A'][:14]} ↔ {row['Prov B'][:14]}</span>
+                    <span style='color:#F87171;font-family:"JetBrains Mono",monospace;'>{row['r']:.3f}</span>
+                </div>""", unsafe_allow_html=True)
+
+            st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-head'><h3>Korelasi vs Nasional</h3></div>", unsafe_allow_html=True)
+            nat_corr = {}
+            for prov in top_provs:
+                common = pivot_v[[prov]].join(nat_full, how='inner').dropna()
+                if len(common) > 5:
+                    nat_corr[prov] = common[prov].corr(common['Harga'])
+            if nat_corr:
+                nat_corr_s = pd.Series(nat_corr).sort_values(ascending=False).head(10) # Tampilkan 10 teratas
+                fig_nc = go.Figure(go.Bar(
+                    x=nat_corr_s.values, y=nat_corr_s.index, orientation='h',
+                    marker_color=['#3DD68C' if v>=0.7 else '#F0B429' if v>=0.4 else '#F87171'
+                                  for v in nat_corr_s.values],
+                    hovertemplate='%{y}: r=%{x:.3f}<extra></extra>'))
+                
+                fig_nc.update_layout(
+                    **get_base_layout('xaxis', 'yaxis', 'margin'),
+                    height=300,
+                    xaxis=dict(**PLOTLY_BASE['xaxis'], range=[0,1]),
+                    yaxis=dict(**PLOTLY_BASE['yaxis'], categoryorder='total ascending'),
+                    showlegend=False, margin=dict(l=0,r=10,t=5,b=5)
+                )
+                st.plotly_chart(fig_nc, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.info("Data tidak cukup untuk korelasi. Perluas rentang tanggal.")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 3 — PETA
@@ -993,104 +1089,7 @@ with tab_map:
         st.info("Koordinat tidak tersedia untuk data ini.")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — DISPARITAS & KORELASI (PART 2)
-# ══════════════════════════════════════════════════════════════════════════════
-with tab_disp_corr:
-    st.markdown("<div class='hdiv'></div>", unsafe_allow_html=True)
-    
-    pivot = df_full.pivot_table(index='Tanggal', columns='Wilayah', values='Harga', aggfunc='mean')
-    pivot_v = pivot[(pivot.index >= d_start) & (pivot.index <= d_end)]
-
-    if pivot_v.shape[1] >= 2 and not pivot_v.empty:
-        corr = pivot_v.corr(method='pearson')
-
-        completeness = pivot_v.notna().sum().sort_values(ascending=False)
-        top_provs = completeness.head(20).index.tolist()
-        corr_sub  = corr.loc[top_provs, top_provs]
-
-        corr_col1, corr_col2 = st.columns([2,1])
-
-        with corr_col1:
-            mask_vals = np.round(corr_sub.values, 2)
-            text_vals = [[f"{v:.2f}" for v in row] for row in mask_vals]
-            fig_corr = go.Figure(go.Heatmap(
-                z=corr_sub.values, x=corr_sub.columns, y=corr_sub.index,
-                colorscale=[[0,'#EF4444'],[0.5,'#1C232D'],[1,'#3DD68C']],
-                zmin=-1, zmax=1,
-                text=text_vals, texttemplate="%{text}",
-                textfont=dict(size=7),
-                colorbar=dict(title='r', tickfont=dict(size=8)),
-                hovertemplate="%{y} ↔ %{x}<br>r = %{z:.3f}<extra></extra>"))
-            
-            # ✅ FIX: Menggunakan get_base_layout
-            fig_corr.update_layout(
-                **get_base_layout('xaxis', 'yaxis', 'margin'),
-                height=460,
-                xaxis=dict(tickangle=-45, tickfont=dict(size=8), showgrid=False),
-                yaxis=dict(tickfont=dict(size=8), showgrid=False),
-                margin=dict(l=10,r=10,t=10,b=80)
-            )
-
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.markdown("<div class='section-head'><h3>Matriks Korelasi Pearson</h3><span class='tag'>20 Provinsi terlengkap datanya</span></div>", unsafe_allow_html=True)
-            st.plotly_chart(fig_corr, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with corr_col2:
-            pairs = [(corr_sub.index[i], corr_sub.columns[j], corr_sub.iloc[i,j])
-                     for i in range(len(corr_sub)) for j in range(i+1,len(corr_sub.columns))]
-            pairs_df = pd.DataFrame(pairs, columns=['Prov A','Prov B','r'])
-
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.markdown("<div class='section-head'><h3>5 Korelasi Tertinggi</h3></div>", unsafe_allow_html=True)
-            for _,row in pairs_df.nlargest(5,'r').iterrows():
-                st.markdown(f"""
-                <div style='display:flex;justify-content:space-between;padding:5px 0;
-                             border-bottom:1px solid #2A3142;font-size:12px;'>
-                    <span>{row['Prov A'][:14]} ↔ {row['Prov B'][:14]}</span>
-                    <span style='color:#3DD68C;font-family:"JetBrains Mono",monospace;'>{row['r']:.3f}</span>
-                </div>""", unsafe_allow_html=True)
-
-            st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-            st.markdown("<div class='section-head'><h3>5 Korelasi Terendah</h3></div>", unsafe_allow_html=True)
-            for _,row in pairs_df.nsmallest(5,'r').iterrows():
-                st.markdown(f"""
-                <div style='display:flex;justify-content:space-between;padding:5px 0;
-                             border-bottom:1px solid #2A3142;font-size:12px;'>
-                    <span>{row['Prov A'][:14]} ↔ {row['Prov B'][:14]}</span>
-                    <span style='color:#F87171;font-family:"JetBrains Mono",monospace;'>{row['r']:.3f}</span>
-                </div>""", unsafe_allow_html=True)
-
-            st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-            st.markdown("<div class='section-head'><h3>Korelasi vs Nasional</h3></div>", unsafe_allow_html=True)
-            nat_corr = {}
-            for prov in top_provs:
-                common = pivot_v[[prov]].join(nat_full, how='inner').dropna()
-                if len(common) > 5:
-                    nat_corr[prov] = common[prov].corr(common['Harga'])
-            if nat_corr:
-                nat_corr_s = pd.Series(nat_corr).sort_values(ascending=False)
-                fig_nc = go.Figure(go.Bar(
-                    x=nat_corr_s.values, y=nat_corr_s.index, orientation='h',
-                    marker_color=['#3DD68C' if v>=0.7 else '#F0B429' if v>=0.4 else '#F87171'
-                                  for v in nat_corr_s.values],
-                    hovertemplate='%{y}: r=%{x:.3f}<extra></extra>'))
-                
-                # ✅ FIX: Menggunakan get_base_layout
-                fig_nc.update_layout(
-                    **get_base_layout('xaxis', 'yaxis', 'margin'),
-                    height=300,
-                    xaxis=dict(**PLOTLY_BASE['xaxis'], range=[0,1]),
-                    yaxis=dict(**PLOTLY_BASE['yaxis'], categoryorder='total ascending'),
-                    showlegend=False, margin=dict(l=0,r=10,t=5,b=5)
-                )
-                st.plotly_chart(fig_nc, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.info("Data tidak cukup untuk korelasi. Perluas rentang tanggal.")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — ANALISIS MENDALAM (PART 1)
+# TAB 4 — ANALISIS MENDALAM
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_analysis:
     an1, an2 = st.columns(2)
@@ -1115,7 +1114,6 @@ with tab_analysis:
             line=dict(color='#60A5FA', width=2),
             hovertemplate='%{x|%d %b %Y}<br>RSI: %{y:.1f}<extra></extra>'))
 
-        # ✅ FIX: Menggunakan get_base_layout
         fig_rsi.update_layout(
             **get_base_layout('xaxis', 'yaxis'),
             height=250,
@@ -1134,8 +1132,9 @@ with tab_analysis:
         </div>""", unsafe_allow_html=True)
 
         fig_hist = go.Figure()
+        # MENGHAPUS LIMITASI [:5] agar sesuai dengan keseluruhan "selected_regions" tanpa batas
         if selected_regions:
-            for i, reg in enumerate(selected_regions[:5]):
+            for i, reg in enumerate(selected_regions):
                 vals = df_sel[df_sel['Wilayah']==reg]['Harga']
                 if vals.empty: continue
                 fig_hist.add_trace(go.Histogram(
@@ -1147,7 +1146,6 @@ with tab_analysis:
                 x=df_view['Harga'], nbinsx=40, name='Nasional',
                 marker_color='#3DD68C', opacity=0.7))
 
-        # ✅ FIX: Menggunakan get_base_layout
         fig_hist.update_layout(
             **get_base_layout('xaxis', 'yaxis'),
             height=250, barmode='overlay',
@@ -1165,20 +1163,20 @@ with tab_analysis:
         Semakin panjang kotaknya, semakin tinggi volatilitas harga di wilayah tersebut.
     </div>""", unsafe_allow_html=True)
 
+    # MENGHAPUS LIMITASI [:8] agar Boxplot menampung semua provinsi terpilih
     if selected_regions:
-        df_box = df_sel[df_sel['Wilayah'].isin(selected_regions[:8])]
+        df_box = df_sel
     else:
-        top_prov = df_view['Wilayah'].value_counts().head(8).index
-        df_box = df_view[df_view['Wilayah'].isin(top_prov)]
+        df_box = df_view
 
     fig_box = px.box(df_box, x='Wilayah', y='Harga', color='Wilayah',
                      color_discrete_sequence=PALETTE, points='outliers')
     fig_box.update_layout(
         **get_base_layout('xaxis', 'yaxis', 'margin'),
-        height=320, showlegend=False,
-        xaxis=dict(**PLOTLY_BASE['xaxis'], title=''),
+        height=400, showlegend=False,
+        xaxis=dict(**PLOTLY_BASE['xaxis'], title='', tickangle=-45), # Label miring agar wilayah yang banyak dapat terbaca
         yaxis=dict(**PLOTLY_BASE['yaxis'], title='Harga (Rp)', tickformat=',.0f'),
-        margin=dict(l=10,r=10,t=10,b=30)
+        margin=dict(l=10,r=10,t=10,b=60)
     )
     st.plotly_chart(fig_box, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1218,10 +1216,7 @@ with tab_analysis:
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — ANALISIS MENDALAM (PART 2)
-# ══════════════════════════════════════════════════════════════════════════════
-with tab_analysis:
+    # ════════ PART 2 — MUSIMAN & YOY ════════
     st.markdown("<div class='hdiv'></div>", unsafe_allow_html=True)
     
     s_c1, s_c2 = st.columns([1,1])
@@ -1270,8 +1265,8 @@ with tab_analysis:
         nat_yoy = nat_full.reset_index()
         nat_yoy.columns = ['Tanggal','Harga']
         nat_yoy['Tahun'] = nat_yoy['Tanggal'].dt.year.astype(str)
-        # Normalisasi ke tahun dummy (contoh: 2000 untuk support leap year / kabisat) untuk X-axis bersama
-        nat_yoy['DummyDate'] = nat_yoy['Tanggal'].apply(lambda d: pd.Timestamp(year=2000, month=d.month, day=d.day) if not (d.month==2 and d.day==29) else pd.Timestamp(year=2000, month=2, day=29))
+        # Normalisasi ke tahun dummy (2000 yang mana adalah tahun kabisat) untuk X-axis bersama
+        nat_yoy['DummyDate'] = nat_yoy['Tanggal'].apply(lambda d: pd.Timestamp(year=2000, month=d.month, day=d.day))
         
         fig_yoy = px.line(nat_yoy, x='DummyDate', y='Harga', color='Tahun',
                           color_discrete_sequence=['#3DD68C','#F0B429','#60A5FA','#F472B6','#A78BFA'])
