@@ -36,9 +36,12 @@ header[data-testid="stHeader"] { display: none !important; }
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 .metric-title { font-size: 11px; color: var(--textsoft); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-weight: 600; }
-.metric-value { font-size: 1.8rem; font-weight: 700; color: var(--text); font-family: 'DM Sans', sans-serif; line-height: 1.2; }
+.metric-value { font-size: 1.8rem; font-weight: 700; color: var(--text); font-family: 'DM Sans', sans-serif; line-height: 1.2; display: flex; align-items: baseline; gap: 8px;}
 .metric-sub { font-size: 12px; color: var(--accent); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
 .metric-sub.danger { color: #F87171; }
+.metric-delta { font-size: 14px; font-weight: 600; padding: 2px 8px; border-radius: 12px; }
+.delta-up { background: rgba(248,113,113,0.15); color: #F87171; }
+.delta-down { background: rgba(61,214,140,0.15); color: #3DD68C; }
 .live-dot {
     display: inline-block; width: 8px; height: 8px; background: var(--accent);
     border-radius: 50%; animation: livepulse 2s infinite; margin-right: 8px;
@@ -49,6 +52,23 @@ header[data-testid="stHeader"] { display: none !important; }
 }
 </style>
 """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PEMETAAN PULAU
+# ─────────────────────────────────────────────────────────────────────────────
+PULAU_MAP = {
+    'Sumatera': ['Aceh', 'Sumatera Utara', 'Sumatera Barat', 'Riau', 'Kepulauan Riau', 'Jambi', 'Sumatera Selatan', 'Bangka Belitung', 'Bengkulu', 'Lampung'],
+    'Jawa': ['Banten', 'DKI Jakarta', 'Jawa Barat', 'Jawa Tengah', 'DI Yogyakarta', 'Jawa Timur'],
+    'Bali & Nusa Tenggara': ['Bali', 'Nusa Tenggara Barat', 'Nusa Tenggara Timur'],
+    'Kalimantan': ['Kalimantan Barat', 'Kalimantan Tengah', 'Kalimantan Selatan', 'Kalimantan Timur', 'Kalimantan Utara'],
+    'Sulawesi': ['Sulawesi Utara', 'Gorontalo', 'Sulawesi Tengah', 'Sulawesi Barat', 'Sulawesi Selatan', 'Sulawesi Tenggara'],
+    'Maluku & Papua': ['Maluku Utara', 'Maluku', 'Papua Barat Daya', 'Papua Barat', 'Papua Tengah', 'Papua', 'Papua Pegunungan', 'Papua Selatan']
+}
+
+def get_pulau(prov):
+    for pulau, provs in PULAU_MAP.items():
+        if prov in provs: return pulau
+    return 'Lainnya'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DATA LOADING
@@ -89,7 +109,9 @@ def load_all_data():
 
     if not all_data: return pd.DataFrame()
     combined = pd.concat(all_data, ignore_index=True).drop_duplicates(subset=['Wilayah','Tanggal'])
-    return combined.sort_values(['Wilayah','Tanggal']).reset_index(drop=True)
+    combined = combined.sort_values(['Wilayah','Tanggal']).reset_index(drop=True)
+    combined['Pulau'] = combined['Wilayah'].apply(get_pulau)
+    return combined
 
 df_full = load_all_data()
 if df_full.empty:
@@ -109,21 +131,29 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-col1, col2 = st.columns([1, 3])
+col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     rentang = st.selectbox("📅 Rentang Waktu", ["6 Bulan Terakhir", "3 Bulan Terakhir", "1 Bulan Terakhir", "Semua Data"])
     days = {"1 Bulan Terakhir": 30, "3 Bulan Terakhir": 90, "6 Bulan Terakhir": 180, "Semua Data": None}[rentang]
-    
     d_start = df_full['Tanggal'].min() if days is None else max(latest_date - pd.Timedelta(days=days), df_full['Tanggal'].min())
     df_view = df_full[(df_full['Tanggal'] >= d_start) & (df_full['Tanggal'] <= latest_date)]
 
 with col2:
-    all_regions = sorted(df_full['Wilayah'].unique())
-    default_regs = [r for r in ['DKI Jakarta', 'Jawa Barat', 'Jawa Timur', 'Sumatera Utara'] if r in all_regions]
-    selected_regs = st.multiselect("🌏 Bandingkan Wilayah Utama", all_regions, default=default_regs)
+    compare_mode = st.radio("🔍 Mode Analisis", ["Per Provinsi", "Per Pulau"], horizontal=True)
+
+with col3:
+    if compare_mode == "Per Provinsi":
+        all_regions = sorted(df_full['Wilayah'].unique())
+        default_regs = [r for r in ['DKI Jakarta', 'Jawa Barat', 'Jawa Timur', 'Sumatera Utara'] if r in all_regions]
+        selected_regs = st.multiselect("🌏 Bandingkan Provinsi", all_regions, default=default_regs)
+    else:
+        all_islands = sorted(df_full['Pulau'].unique())
+        all_islands = [i for i in all_islands if i != 'Lainnya']
+        default_islands = [i for i in ['Jawa', 'Sumatera', 'Kalimantan'] if i in all_islands]
+        selected_regs = st.multiselect("🏝️ Bandingkan Pulau", all_islands, default=default_islands)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# METRIC CARDS (KOMPARASI INSTAN)
+# METRIC CARDS (KOMPARASI INSTAN & VOLATILITAS)
 # ─────────────────────────────────────────────────────────────────────────────
 df_latest = df_full[df_full['Tanggal'] == latest_date]
 if not df_latest.empty:
@@ -132,13 +162,31 @@ if not df_latest.empty:
     max_row = df_latest.loc[df_latest['Harga'].idxmax()]
     disparitas = max_row['Harga'] - min_row['Harga']
     
-    mc1, mc2, mc3, mc4 = st.columns(4)
+    # Hitung Komparasi Waktu (vs 30 Hari Lalu)
+    prev_date = latest_date - pd.Timedelta(days=30)
+    df_prev = df_full[df_full['Tanggal'] <= prev_date]
+    if not df_prev.empty:
+        prev_date_actual = df_prev['Tanggal'].max()
+        prev_avg = df_full[df_full['Tanggal'] == prev_date_actual]['Harga'].mean()
+        delta_pct = ((avg_price - prev_avg) / prev_avg) * 100
+    else:
+        delta_pct = 0
+        
+    delta_class = "delta-up" if delta_pct > 0 else "delta-down" if delta_pct < 0 else ""
+    delta_icon = "▲" if delta_pct > 0 else "▼" if delta_pct < 0 else "-"
+    delta_html = f"<span class='metric-delta {delta_class}'>{delta_icon} {abs(delta_pct):.1f}%</span>" if delta_pct != 0 else ""
+
+    # Hitung Volatilitas Nasional (Coefficient of Variation)
+    nat_avg_series = df_view.groupby('Tanggal')['Harga'].mean()
+    cv_nasional = (nat_avg_series.std() / nat_avg_series.mean() * 100) if nat_avg_series.mean() != 0 else 0
+
+    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
     
     mc1.markdown(f"""
         <div class='metric-box'>
             <div class='metric-title'>Rata-rata Nasional</div>
-            <div class='metric-value'>Rp {avg_price:,.0f}</div>
-            <div class='metric-sub'>Indikator Dasar</div>
+            <div class='metric-value'>Rp {avg_price:,.0f} {delta_html}</div>
+            <div class='metric-sub'>vs 30 Hari Lalu</div>
         </div>
     """, unsafe_allow_html=True)
     
@@ -166,6 +214,14 @@ if not df_latest.empty:
         </div>
     """, unsafe_allow_html=True)
     
+    mc5.markdown(f"""
+        <div class='metric-box'>
+            <div class='metric-title'>Volatilitas Pasar</div>
+            <div class='metric-value'>{cv_nasional:.1f}%</div>
+            <div class='metric-sub'>Koefisien Variasi (CV)</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
 st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -185,16 +241,14 @@ def apply_beautiful_layout(fig, title):
     return fig
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CHART 1: TREN HARGA (AREA & LINE)
+# CHART 1: TREN HARGA (PROVINSI ATAU PULAU)
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("<div class='card'>", unsafe_allow_html=True)
 
 nat_avg = df_view.groupby('Tanggal')['Harga'].mean()
 fig1 = go.Figure()
 
-# Hitung nilai minimum dan maksimum untuk memfokuskan Y-Axis
-y_mins = [nat_avg.min()]
-y_maxs = [nat_avg.max()]
+y_mins, y_maxs = [nat_avg.min()], [nat_avg.max()]
 
 # Garis Nasional (Area Fill)
 fig1.add_trace(go.Scatter(
@@ -204,25 +258,33 @@ fig1.add_trace(go.Scatter(
     hovertemplate='<b>Nasional</b><br>%{x|%d %b %Y}<br>Rp %{y:,.0f}<extra></extra>'
 ))
 
-# Garis Provinsi Terpilih
-palette = ['#F0B429', '#60A5FA', '#F472B6', '#A78BFA', '#FB923C']
-for i, reg in enumerate(selected_regs):
-    df_reg = df_view[df_view['Wilayah'] == reg].sort_values('Tanggal')
-    
-    if not df_reg.empty:
-        y_mins.append(df_reg['Harga'].min())
-        y_maxs.append(df_reg['Harga'].max())
-        
-    fig1.add_trace(go.Scatter(
-        x=df_reg['Tanggal'], y=df_reg['Harga'], name=reg,
-        line=dict(color=palette[i % len(palette)], width=1.5),
-        hovertemplate=f'<b>{reg}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'
-    ))
+palette = ['#F0B429', '#60A5FA', '#F472B6', '#A78BFA', '#FB923C', '#22D3EE']
 
-fig1 = apply_beautiful_layout(fig1, "📈 Pergerakan & Komparasi Harga Sepanjang Waktu")
+if compare_mode == "Per Provinsi":
+    for i, reg in enumerate(selected_regs):
+        df_plot = df_view[df_view['Wilayah'] == reg].sort_values('Tanggal')
+        if not df_plot.empty:
+            y_mins.append(df_plot['Harga'].min()); y_maxs.append(df_plot['Harga'].max())
+            fig1.add_trace(go.Scatter(
+                x=df_plot['Tanggal'], y=df_plot['Harga'], name=reg,
+                line=dict(color=palette[i % len(palette)], width=1.5),
+                hovertemplate=f'<b>{reg}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'
+            ))
+else:
+    # Mode Pulau
+    for i, pulau in enumerate(selected_regs):
+        df_plot = df_view[df_view['Pulau'] == pulau].groupby('Tanggal')['Harga'].mean().reset_index()
+        if not df_plot.empty:
+            y_mins.append(df_plot['Harga'].min()); y_maxs.append(df_plot['Harga'].max())
+            fig1.add_trace(go.Scatter(
+                x=df_plot['Tanggal'], y=df_plot['Harga'], name=f"🏝️ {pulau}",
+                line=dict(color=palette[i % len(palette)], width=2),
+                hovertemplate=f'<b>Pulau {pulau}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'
+            ))
 
-y_min_total = min(y_mins)
-y_max_total = max(y_maxs)
+fig1 = apply_beautiful_layout(fig1, f"📈 Pergerakan Harga Sepanjang Waktu ({compare_mode})")
+
+y_min_total, y_max_total = min(y_mins), max(y_maxs)
 padding = (y_max_total - y_min_total) * 0.05
 if padding == 0: padding = y_min_total * 0.05
 
@@ -233,67 +295,58 @@ st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False}
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CHART 2 & 3: TREN DISPARITAS & RANKING HARGA
+# 3 KOLOM BAWAH: DISPARITAS | RANKING | VOLATILITAS
 # ─────────────────────────────────────────────────────────────────────────────
-col_chart_left, col_chart_right = st.columns([1, 1])
+col_left, col_mid, col_right = st.columns([1, 1, 1])
 
-with col_chart_left:
+# ---> KIRI: TREN DISPARITAS
+with col_left:
     st.markdown("<div class='card' style='height: 100%;'>", unsafe_allow_html=True)
-    
-    # Hitung Disparitas Harian (Max - Min seluruh Indonesia)
     daily_stats = df_view.groupby('Tanggal')['Harga'].agg(['max', 'min']).reset_index()
     daily_stats['Disparitas'] = daily_stats['max'] - daily_stats['min']
     
-    fig3 = go.Figure()
-    fig3.add_trace(go.Scatter(
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(
         x=daily_stats['Tanggal'], y=daily_stats['Disparitas'],
-        fill='tozeroy', fillcolor='rgba(240, 180, 41, 0.1)',
-        line=dict(color='#F0B429', width=2.5),
-        name='Gap Harga',
-        hovertemplate='<b>%{x|%d %b %Y}</b><br>Disparitas: Rp %{y:,.0f}<extra></extra>'
+        fill='tozeroy', fillcolor='rgba(240, 180, 41, 0.1)', line=dict(color='#F0B429', width=2),
+        name='Gap Harga', hovertemplate='<b>%{x|%d %b %Y}</b><br>Disparitas: Rp %{y:,.0f}<extra></extra>'
     ))
-    
-    fig3 = apply_beautiful_layout(fig3, "📐 Tren Disparitas Nasional")
-    fig3.update_layout(
-        height=400, 
-        showlegend=False,
-        yaxis=dict(title="Selisih Harga (Rp)", tickfont=dict(size=10))
+    fig2 = apply_beautiful_layout(fig2, "📐 Tren Disparitas Nasional")
+    fig2.update_layout(height=380, showlegend=False, yaxis=dict(title="Selisih (Rp)", tickfont=dict(size=10)))
+    st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ---> TENGAH: RANKING EXTREME
+with col_mid:
+    st.markdown("<div class='card' style='height: 100%;'>", unsafe_allow_html=True)
+    df_latest_sorted = df_latest.sort_values('Harga', ascending=True)
+    df_top_bottom = pd.concat([df_latest_sorted.head(4), df_latest_sorted.tail(4)]) if len(df_latest_sorted) > 8 else df_latest_sorted
+
+    fig3 = px.bar(
+        df_top_bottom, x='Harga', y='Wilayah', orientation='h',
+        color='Harga', color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'], text='Harga'
     )
-    
+    fig3.update_traces(texttemplate='Rp %{text:,.0f}', textposition='outside', hovertemplate='<b>%{y}</b><br>Rp %{x:,.0f}<extra></extra>', marker_line_width=0)
+    fig3 = apply_beautiful_layout(fig3, "📊 4 Termurah & Termahal")
+    fig3.update_layout(height=380, coloraxis_showscale=False, yaxis=dict(title="", tickfont=dict(size=10)), xaxis=dict(title="", showticklabels=False, showgrid=False))
     st.plotly_chart(fig3, use_container_width=True, config={'displayModeBar': False})
     st.markdown("</div>", unsafe_allow_html=True)
 
-with col_chart_right:
+# ---> KANAN: TOP VOLATILITAS (BAR CHART)
+with col_right:
     st.markdown("<div class='card' style='height: 100%;'>", unsafe_allow_html=True)
-
-    # Ambil data hari terakhir, lalu ambil 5 Termurah dan 5 Termahal agar chart bar tetap proporsional
-    df_latest_sorted = df_latest.sort_values('Harga', ascending=True)
+    # Hitung CV per wilayah selama rentang waktu
+    vol_data = df_view.groupby('Wilayah')['Harga'].apply(lambda x: x.std() / x.mean() * 100).reset_index()
+    vol_data.columns = ['Wilayah', 'CV']
+    vol_data = vol_data.sort_values('CV', ascending=False).head(8) # Ambil 8 Paling Volatil
     
-    # Gabungkan Top 5 Termurah dan Top 5 Termahal untuk perbandingan instan
-    if len(df_latest_sorted) > 10:
-        df_top_bottom = pd.concat([df_latest_sorted.head(5), df_latest_sorted.tail(5)])
-    else:
-        df_top_bottom = df_latest_sorted
-
-    fig2 = px.bar(
-        df_top_bottom, x='Harga', y='Wilayah', orientation='h',
-        color='Harga', color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'],
-        text='Harga'
+    fig4 = px.bar(
+        vol_data.sort_values('CV', ascending=True), # Sort ascending for Plotly horizontal bar display
+        x='CV', y='Wilayah', orientation='h',
+        color='CV', color_continuous_scale=['#F0B429', '#F87171'], text='CV'
     )
-
-    fig2.update_traces(
-        texttemplate='Rp %{text:,.0f}', textposition='outside',
-        hovertemplate='<b>%{y}</b><br>Harga: Rp %{x:,.0f}<extra></extra>',
-        marker_line_width=0
-    )
-
-    fig2 = apply_beautiful_layout(fig2, f"📊 Komparasi 5 Termurah & Termahal")
-    fig2.update_layout(
-        height=400,
-        coloraxis_showscale=False,
-        yaxis=dict(title="", tickfont=dict(size=11)),
-        xaxis=dict(title="", showticklabels=False, showgrid=False)
-    )
-
-    st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+    fig4.update_traces(texttemplate='%{text:.1f}%', textposition='outside', hovertemplate='<b>%{y}</b><br>CV: %{x:.2f}%<extra></extra>', marker_line_width=0)
+    fig4 = apply_beautiful_layout(fig4, "🌪️ Top 8 Wilayah Paling Volatil")
+    fig4.update_layout(height=380, coloraxis_showscale=False, yaxis=dict(title="", tickfont=dict(size=10)), xaxis=dict(title="", showticklabels=False, showgrid=False))
+    st.plotly_chart(fig4, use_container_width=True, config={'displayModeBar': False})
     st.markdown("</div>", unsafe_allow_html=True)
