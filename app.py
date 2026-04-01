@@ -597,11 +597,12 @@ st.markdown("<div style='height:.75rem;'></div>", unsafe_allow_html=True)
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_trend, tab_disparity, tab_map, tab_correlation, tab_analysis, tab_data = st.tabs([
+tab_trend, tab_disparity, tab_map, tab_correlation, tab_season, tab_analysis, tab_data = st.tabs([
     "📈 Tren Harga",
     "📐 Disparitas",
     "🗺️ Peta Sebaran",
     "🔗 Korelasi",
+    "📅 Musiman & YoY",
     "🔬 Analisis Lanjutan",
     "📋 Data"
 ])
@@ -613,6 +614,7 @@ with tab_trend:
     c_opt1, c_opt2 = st.columns([3,1])
     with c_opt2:
         compare_mode = st.radio("Mode Tampilan", ["Wilayah Terpilih","Nasional Saja","Semua Wilayah"], index=0, key="cmode")
+        chart_type = st.radio("Gaya Nasional", ["Garis", "Candlestick (Mingguan)"], index=0, key="ctype")
 
     with c_opt1:
         if compare_mode == "Wilayah Terpilih":
@@ -660,10 +662,22 @@ with tab_trend:
             opacity=0.8,
             hovertemplate=f'<b>{reg}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'))
 
-    fig.add_trace(go.Scatter(
-        x=nat_v.index, y=nat_v.values, name='🇮 Nasional (Avg)',
-        line=dict(color='#FFFFFF', width=2.2),
-        hovertemplate='<b>Nasional</b><br>%{x|%d %b %Y}<br>Rp %{y:,.0f}<extra></extra>'))
+    if chart_type == "Garis":
+        fig.add_trace(go.Scatter(
+            x=nat_v.index, y=nat_v.values, name='🇮 Nasional (Avg)',
+            line=dict(color='#FFFFFF', width=2.2),
+            hovertemplate='<b>Nasional</b><br>%{x|%d %b %Y}<br>Rp %{y:,.0f}<extra></extra>'))
+    else:
+        nat_w = nat_full.resample('W').ohlc()
+        nat_w_v = nat_w[(nat_w.index >= d_start) & (nat_w.index <= d_end)]
+        fig.add_trace(go.Candlestick(
+            x=nat_w_v.index, open=nat_w_v['open'], high=nat_w_v['high'],
+            low=nat_w_v['low'], close=nat_w_v['close'],
+            name='🇮 Nasional (OHLC)',
+            increasing_line_color='#3DD68C', decreasing_line_color='#F87171',
+            increasing_fillcolor='rgba(61,214,140,0.5)', decreasing_fillcolor='rgba(248,113,113,0.5)'
+        ))
+        fig.update_layout(xaxis_rangeslider_visible=False)
 
     if show_sma:
         fig.add_trace(go.Scatter(x=sma7_v.index, y=sma7_v.values, name='SMA 7',
@@ -1117,38 +1131,28 @@ with tab_analysis:
 
     st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-head'><h3>Heatmap Bulanan — Rata-rata Harga Nasional</h3><span class='tag'>Baris = tahun, Kolom = bulan</span></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-head'><h3>📦 Distribusi & Outlier Harga (Boxplot)</h3><span class='tag'>Periode terpilih</span></div>", unsafe_allow_html=True)
     st.markdown("""<div style='font-size:11px;color:#6B7A8D;margin-bottom:8px;'>
-        Identifikasi pola musiman: bulan mana yang secara historis cenderung mahal atau murah.
-        Berguna untuk perencanaan stok dan antisipasi kenaikan harga sebelum hari raya.
+        Melihat rentang harga (kuartil), nilai median, dan titik ekstrem (outlier) pada provinsi yang dipilih.
+        Semakin panjang kotaknya, semakin tinggi volatilitas harga di wilayah tersebut.
     </div>""", unsafe_allow_html=True)
 
-    nat_df = nat_full.reset_index()
-    nat_df.columns = ['Tanggal','Harga']
-    nat_df['Tahun'] = nat_df['Tanggal'].dt.year
-    nat_df['Bulan'] = nat_df['Tanggal'].dt.month
-    heat_data = nat_df.groupby(['Tahun','Bulan'])['Harga'].mean().unstack(fill_value=np.nan)
-    heat_data.columns = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][:len(heat_data.columns)]
+    if selected_regions:
+        df_box = df_sel[df_sel['Wilayah'].isin(selected_regions[:8])]
+    else:
+        top_prov = df_view['Wilayah'].value_counts().head(8).index
+        df_box = df_view[df_view['Wilayah'].isin(top_prov)]
 
-    if not heat_data.empty:
-        fig_heat = go.Figure(go.Heatmap(
-            z=heat_data.values, x=heat_data.columns, y=heat_data.index.astype(str),
-            colorscale=[[0,'#22D3EE'],[0.5,'#F0B429'],[1,'#EF4444']],
-            text=[[f"Rp{v:,.0f}" if not np.isnan(v) else "-" for v in row] for row in heat_data.values],
-            texttemplate="%{text}", textfont=dict(size=9),
-            colorbar=dict(title="Rp", tickfont=dict(size=9)),
-            hovertemplate="Bulan: %{x}<br>Tahun: %{y}<br>Rata-rata: Rp %{z:,.0f}<extra></extra>"))
-        
-        # ✅ FIX: Menggunakan get_base_layout
-        fig_heat.update_layout(
-            **get_base_layout('xaxis', 'yaxis', 'margin'),
-            height=220,
-            xaxis=dict(showgrid=False, tickfont=dict(size=10)),
-            yaxis=dict(showgrid=False, tickfont=dict(size=10)),
-            margin=dict(l=10,r=10,t=5,b=5)
-        )
-        st.plotly_chart(fig_heat, use_container_width=True)
-
+    fig_box = px.box(df_box, x='Wilayah', y='Harga', color='Wilayah',
+                     color_discrete_sequence=PALETTE, points='outliers')
+    fig_box.update_layout(
+        **get_base_layout('xaxis', 'yaxis', 'margin'),
+        height=320, showlegend=False,
+        xaxis=dict(**PLOTLY_BASE['xaxis'], title=''),
+        yaxis=dict(**PLOTLY_BASE['yaxis'], title='Harga (Rp)', tickformat=',.0f'),
+        margin=dict(l=10,r=10,t=10,b=30)
+    )
+    st.plotly_chart(fig_box, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     if show_anomaly:
@@ -1184,6 +1188,74 @@ with tab_analysis:
         else:
             st.success("✅ Tidak ada anomali terdeteksi.")
 
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 5 (NEW) — MUSIMAN & YOY
+# ══════════════════════════════════════════════════════════════════════════════
+with tab_season:
+    s_c1, s_c2 = st.columns([1,1])
+
+    with s_c1:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("<div class='section-head'><h3>Heatmap Bulanan (Nasional)</h3><span class='tag'>Baris = tahun, Kolom = bulan</span></div>", unsafe_allow_html=True)
+        st.markdown("""<div style='font-size:11px;color:#6B7A8D;margin-bottom:8px;'>
+            Identifikasi pola musiman: bulan mana yang secara historis cenderung mahal atau murah.
+        </div>""", unsafe_allow_html=True)
+
+        nat_df = nat_full.reset_index()
+        nat_df.columns = ['Tanggal','Harga']
+        nat_df['Tahun'] = nat_df['Tanggal'].dt.year
+        nat_df['Bulan'] = nat_df['Tanggal'].dt.month
+        heat_data = nat_df.groupby(['Tahun','Bulan'])['Harga'].mean().unstack(fill_value=np.nan)
+        heat_data.columns = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][:len(heat_data.columns)]
+
+        if not heat_data.empty:
+            fig_heat = go.Figure(go.Heatmap(
+                z=heat_data.values, x=heat_data.columns, y=heat_data.index.astype(str),
+                colorscale=[[0,'#22D3EE'],[0.5,'#F0B429'],[1,'#EF4444']],
+                text=[[f"Rp{v:,.0f}" if not np.isnan(v) else "-" for v in row] for row in heat_data.values],
+                texttemplate="%{text}", textfont=dict(size=9),
+                colorbar=dict(title="Rp", tickfont=dict(size=9)),
+                hovertemplate="Bulan: %{x}<br>Tahun: %{y}<br>Rata-rata: Rp %{z:,.0f}<extra></extra>"))
+            
+            fig_heat.update_layout(
+                **get_base_layout('xaxis', 'yaxis', 'margin'),
+                height=280,
+                xaxis=dict(showgrid=False, tickfont=dict(size=10)),
+                yaxis=dict(showgrid=False, tickfont=dict(size=10)),
+                margin=dict(l=10,r=10,t=5,b=5)
+            )
+            st.plotly_chart(fig_heat, use_container_width=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with s_c2:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("<div class='section-head'><h3>Tren Year-over-Year (YoY)</h3><span class='tag'>Perbandingan Antartahun</span></div>", unsafe_allow_html=True)
+        st.markdown("""<div style='font-size:11px;color:#6B7A8D;margin-bottom:8px;'>
+            Membandingkan pergerakan harga pada tanggal dan bulan yang sama di tahun-tahun berbeda.
+        </div>""", unsafe_allow_html=True)
+
+        nat_yoy = nat_full.reset_index()
+        nat_yoy.columns = ['Tanggal','Harga']
+        nat_yoy['Tahun'] = nat_yoy['Tanggal'].dt.year.astype(str)
+        # Normalisasi ke tahun dummy (contoh: 2000 untuk support leap year / kabisat) untuk X-axis bersama
+        nat_yoy['DummyDate'] = nat_yoy['Tanggal'].apply(lambda d: pd.Timestamp(year=2000, month=d.month, day=d.day) if not (d.month==2 and d.day==29) else pd.Timestamp(year=2000, month=2, day=29))
+        
+        fig_yoy = px.line(nat_yoy, x='DummyDate', y='Harga', color='Tahun',
+                          color_discrete_sequence=['#3DD68C','#F0B429','#60A5FA','#F472B6','#A78BFA'])
+        
+        fig_yoy.update_traces(line=dict(width=2), hovertemplate='Bulan-Hari: %{x|%d %b}<br>Harga: Rp %{y:,.0f}<extra></extra>')
+        fig_yoy.update_layout(
+            **get_base_layout('xaxis', 'yaxis', 'margin', 'legend'),
+            height=280,
+            xaxis=dict(**PLOTLY_BASE['xaxis'], title='', tickformat='%b'),
+            yaxis=dict(**PLOTLY_BASE['yaxis'], title='Harga (Rp)', tickformat=',.0f'),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)),
+            margin=dict(l=10,r=10,t=10,b=10)
+        )
+        st.plotly_chart(fig_yoy, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
