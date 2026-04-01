@@ -3,7 +3,7 @@ import glob
 import os
 from datetime import datetime
 
-# Koordinat Provinsi di Indonesia
+# Koordinat Provinsi di Indonesia untuk Visualisasi Peta
 PROVINCE_COORDINATES = {
     'Aceh': [4.6951, 96.7494], 'Sumatera Utara': [2.1121, 99.0557], 'Sumatera Barat': [-0.7392, 100.8000],
     'Riau': [0.2933, 101.7068], 'Jambi': [-1.6183, 103.6238], 'Sumatera Selatan': [-3.3194, 103.9144],
@@ -20,56 +20,58 @@ PROVINCE_COORDINATES = {
     'Papua Pegunungan': [-4.0000, 139.0000], 'Papua Barat Daya': [-0.8000, 131.5000]
 }
 
-def load_single_csv(filepath):
-    """Membaca file CSV dengan menangani metadata dan format kolom tanggal"""
+def load_single_file(filepath):
+    """Membaca file (CSV atau XLSX) dan mengolahnya menjadi format panjang (long format)"""
     try:
-        # Baca 5 baris pertama untuk mendeteksi di mana header sebenarnya berada
-        temp_df = pd.read_csv(filepath, nrows=10)
+        ext = os.path.splitext(filepath)[1].lower()
         
-        # Cari baris yang mengandung 'Wilayah' atau 'No.' untuk menentukan header
-        skip_n = 0
-        for i, row in temp_df.iterrows():
-            if any(str(val).strip().lower() in ['wilayah', 'no.', 'no'] for val in row.values):
-                skip_n = i + 1
-                break
-        
-        # Jika tidak ditemukan otomatis, gunakan default 3 baris metadata
-        if skip_n == 0: skip_n = 3
-        
-        df = pd.read_csv(filepath, skiprows=skip_n)
-        
-        # Pembersihan kolom wilayah
-        # Terkadang kolom wilayah adalah kolom kedua jika ada kolom 'No.'
+        # Baca file sesuai ekstensi
+        if ext == '.csv':
+            # Coba deteksi header dengan membaca beberapa baris awal
+            df_test = pd.read_csv(filepath, nrows=10)
+            skip_n = 0
+            for i, row in df_test.iterrows():
+                if any(str(val).strip().lower() in ['wilayah', 'no', 'provinsi'] for val in row.values):
+                    skip_n = i + 1
+                    break
+            df = pd.read_csv(filepath, skiprows=skip_n if skip_n > 0 else 3)
+        else:
+            # Untuk Excel, biasanya metadata ada di 3-5 baris pertama
+            df = pd.read_excel(filepath, skiprows=3)
+
+        # Cari kolom Wilayah/Provinsi
         if 'Wilayah' not in df.columns:
-            # Cari kolom yang isinya nama provinsi
             for col in df.columns:
-                if df[col].astype(str).str.contains('Jakarta|Jawa|Sumatera', na=False).any():
+                # Cek jika kolom mengandung nama provinsi populer
+                if df[col].astype(str).str.contains('Jakarta|Jawa|Bali|Papua', na=False).any():
                     df = df.rename(columns={col: 'Wilayah'})
                     break
         
         if 'Wilayah' not in df.columns:
             return pd.DataFrame()
 
-        # Hapus baris yang merupakan catatan kaki (biasanya mengandung 'Sumber' atau NaN)
+        # Bersihkan baris non-data
         df = df[df['Wilayah'].notna()]
-        df = df[~df['Wilayah'].astype(str).str.contains('Sumber|Keterangan|Total', na=False, case=False)]
+        df = df[~df['Wilayah'].astype(str).str.contains('Sumber|Keterangan|Total|Rata-rata', na=False, case=False)]
         
-        # Mengubah dari Wide ke Long format
-        # Kolom tanggal biasanya berbentuk numerik atau string tanggal
+        # Identifikasi kolom tanggal (biasanya format string atau datetime)
         id_vars = ['Wilayah']
-        # Ambil semua kolom yang bukan 'Wilayah' dan bukan kolom indeks numerik yang tak bernama
-        date_cols = [c for c in df.columns if c != 'Wilayah' and not c.startswith('Unnamed')]
+        # Kolom tanggal adalah semua kolom kecuali 'Wilayah' dan kolom index/nomor
+        date_cols = [c for c in df.columns if c != 'Wilayah' and not str(c).startswith('Unnamed')]
         
         melted = df.melt(id_vars=id_vars, value_vars=date_cols, var_name='Tanggal', value_name='Harga')
         
-        # Konversi Harga: hapus karakter non-numerik seperti '.' untuk ribuan (jika ada)
-        melted['Harga'] = melted['Harga'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        # Bersihkan Harga (hilangkan titik ribuan jika string)
+        if melted['Harga'].dtype == object:
+            melted['Harga'] = melted['Harga'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        
         melted['Harga'] = pd.to_numeric(melted['Harga'], errors='coerce')
         
-        # Konversi Tanggal
+        # Bersihkan Tanggal
+        # Terkadang Excel mengimpor tanggal sebagai angka (serial), pandas to_datetime biasanya menangani ini
         melted['Tanggal'] = pd.to_datetime(melted['Tanggal'], errors='coerce')
         
-        # Bersihkan baris yang gagal dikonversi
+        # Drop baris yang tidak valid
         melted = melted.dropna(subset=['Tanggal', 'Harga'])
         melted = melted[melted['Harga'] > 0]
         
@@ -79,22 +81,25 @@ def load_single_csv(filepath):
         return pd.DataFrame()
 
 def load_all_data(base_path):
-    """Mencari dan memuat semua file CSV di folder Data"""
-    # Gunakan path relatif dari lokasi skrip ini
+    """Mencari semua file di folder Data dengan ekstensi .xlsx atau .csv"""
     data_dir = os.path.join(base_path, 'Data')
     
-    # Jika tidak ada, coba cari di folder saat ini jika base_path adalah root
-    if not os.path.exists(data_dir):
-        data_dir = base_path 
-
-    csv_files = glob.glob(os.path.join(data_dir, '**', '*.csv'), recursive=True)
+    # Cari file .xlsx dan .csv
+    files = glob.glob(os.path.join(data_dir, '*.xlsx')) + glob.glob(os.path.join(data_dir, '*.csv'))
     
-    if not csv_files:
+    if not files:
+        # Coba cari di root jika tidak ketemu di folder Data
+        files = glob.glob(os.path.join(base_path, '*.xlsx')) + glob.glob(os.path.join(base_path, '*.csv'))
+
+    if not files:
         return pd.DataFrame()
     
     all_dfs = []
-    for f in csv_files:
-        df_part = load_single_csv(f)
+    for f in files:
+        # Lewati file sementara (temp files) yang dibuat Excel
+        if os.path.basename(f).startswith('~$'): continue
+        
+        df_part = load_single_file(f)
         if not df_part.empty:
             all_dfs.append(df_part)
             
@@ -103,11 +108,14 @@ def load_all_data(base_path):
         
     full_df = pd.concat(all_dfs, ignore_index=True)
     
-    # Tambahkan Geodata
-    full_df['Lat'] = full_df['Wilayah'].map(lambda x: PROVINCE_COORDINATES.get(x.strip(), [None, None])[0])
-    full_df['Lon'] = full_df['Wilayah'].map(lambda x: PROVINCE_COORDINATES.get(x.strip(), [None, None])[1])
+    # Normalisasi nama wilayah (hapus spasi berlebih)
+    full_df['Wilayah'] = full_df['Wilayah'].astype(str).str.strip()
     
-    # Sortir dan hitung delta
+    # Tambahkan Geodata
+    full_df['Lat'] = full_df['Wilayah'].map(lambda x: PROVINCE_COORDINATES.get(x, [None, None])[0])
+    full_df['Lon'] = full_df['Wilayah'].map(lambda x: PROVINCE_COORDINATES.get(x, [None, None])[1])
+    
+    # Hitung Delta
     full_df = full_df.sort_values(['Wilayah', 'Tanggal'])
     full_df['Prev_Harga'] = full_df.groupby('Wilayah')['Harga'].shift(1)
     
