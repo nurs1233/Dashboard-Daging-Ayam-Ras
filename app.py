@@ -5,529 +5,381 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import numpy as np
 
-# Page configuration
+# --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Dashboard Harga Daging Ayam Ras",
+    page_title="Market Intelligence | Daging Ayam Ras",
     page_icon="🐔",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS untuk styling yang mirip dengan HTML
+# --- CUSTOM CSS (PREMIUM THEME) ---
 st.markdown("""
 <style>
-    /* Main theme colors */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+
     :root {
         --primary: #012D1D;
-        --primary-container: #1B4332;
-        --secondary: #8E4E14;
-        --background: #F8F9FA;
+        --accent: #EAB308;
+        --success: #16A34A;
+        --danger: #DC2626;
+        --neutral: #64748B;
     }
+
+    /* Hide Streamlit Header/Footer */
+    header, footer { visibility: hidden; }
     
-    /* Hide Streamlit default elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Sidebar styling */
-    .css-1d391kg {
+    .main { background-color: #F8FAFC; }
+
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
         background-color: #012D1D !important;
+        border-right: 1px solid rgba(255,255,255,0.1);
     }
     
-    .sidebar-content {
-        background-color: #012D1D;
-        color: white;
-    }
-    
-    /* Metric cards styling */
+    section[data-testid="stSidebar"] .stMarkdown h3 { color: white !important; }
+
+    /* Card Styling */
     .metric-card {
         background: white;
         padding: 1.5rem;
-        border-radius: 0.75rem;
-        border-left: 4px solid;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
+        border-radius: 1rem;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+        border: 1px solid #F1F5F9;
+        transition: transform 0.2s ease;
     }
+    .metric-card:hover { transform: translateY(-4px); }
     
-    .metric-card-average { border-left-color: #8E4E14; }
-    .metric-card-low { border-left-color: #16A34A; }
-    .metric-card-high { border-left-color: #DC2626; }
-    .metric-card-total { border-left-color: #012D1D; }
-    
-    .metric-label {
-        font-size: 0.625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #414844;
-        margin-bottom: 0.5rem;
-    }
-    
-    .metric-value {
-        font-size: 2rem;
-        font-weight: 800;
-        color: #012D1D;
-        line-height: 1;
-    }
-    
-    .metric-subtitle {
-        font-size: 0.75rem;
-        color: #414844;
-        margin-top: 0.5rem;
-    }
-    
-    /* Chart containers */
+    .card-label { font-size: 0.75rem; font-weight: 700; color: var(--neutral); text-transform: uppercase; letter-spacing: 0.05em; }
+    .card-value { font-size: 1.75rem; font-weight: 800; color: var(--primary); margin: 0.25rem 0; }
+    .card-delta { font-size: 0.75rem; font-weight: 600; }
+    .delta-up { color: var(--danger); }
+    .delta-down { color: var(--success); }
+
+    /* Chart Containers */
     .chart-container {
         background: white;
-        padding: 2rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        padding: 1.5rem;
+        border-radius: 1rem;
+        border: 1px solid #F1F5F9;
         margin-bottom: 1.5rem;
     }
-    
-    /* Title styling */
-    .main-title {
-        font-size: 2.25rem;
-        font-weight: 800;
-        color: #012D1D;
-        margin-bottom: 0.5rem;
-        font-family: 'Manrope', sans-serif;
-    }
-    
-    .subtitle {
-        color: #414844;
-        font-size: 0.875rem;
-        margin-bottom: 2rem;
-    }
-    
-    /* Status badges */
-    .badge-stabil {
-        background: #86AF99;
-        color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-size: 0.625rem;
+
+    /* Status Badges */
+    .status-pill {
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
     }
-    
-    .badge-waspada {
-        background: #FFDAD6;
-        color: #93000A;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-size: 0.625rem;
-        font-weight: 700;
-        text-transform: uppercase;
-    }
-    
-    /* Table styling */
-    div[data-testid="stDataFrame"] {
-        border-radius: 0.75rem;
-        overflow: hidden;
-    }
-    
-    /* Button styling */
+    .status-waspada { background: #FEE2E2; color: #991B1B; }
+    .status-stabil { background: #DCFCE7; color: #166534; }
+
+    /* Custom Button */
     .stButton>button {
-        background-color: #012D1D;
+        background: #1B4332;
         color: white;
-        border-radius: 9999px;
-        font-weight: 700;
-        padding: 0.5rem 1.5rem;
+        border-radius: 0.75rem;
         border: none;
+        padding: 0.5rem 1rem;
+        width: 100%;
+        font-weight: 600;
+        transition: all 0.3s;
     }
-    
-    .stButton>button:hover {
-        background-color: #1B4332;
+    .stButton>button:hover { background: #2D6A4F; border: none; color: white; }
+
+    /* Live Pulse */
+    .pulse {
+        width: 10px;
+        height: 10px;
+        background: #16A34A;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 0 rgba(22, 163, 74, 0.4);
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Function to generate sample data
+# --- DATA GENERATION (MOCK SP2KP DATA) ---
 @st.cache_data
-def generate_sample_data():
-    """Generate sample data for demonstration"""
-    regions = ['DKI Jakarta', 'Jawa Barat', 'Jawa Timur', 'Banten', 'Papua', 
-               'Sumatera Utara', 'Sulawesi Selatan', 'Bali']
+def load_market_data():
+    regions = {
+        'DKI Jakarta': [-6.2088, 106.8456, 38000],
+        'Jawa Barat': [-6.9175, 107.6191, 33000],
+        'Jawa Timur': [-7.2575, 112.7521, 31000],
+        'Banten': [-6.1200, 106.1503, 34000],
+        'Papua': [-4.2699, 138.0804, 45000],
+        'Sumatera Utara': [3.5952, 98.6722, 32000],
+        'Sulawesi Selatan': [-5.1476, 119.4327, 29000],
+        'Bali': [-8.4095, 115.1889, 36000]
+    }
     
-    # Generate dates for the last 30 days
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=30)
-    dates = pd.date_range(start=start_date, end=end_date, freq='D')
+    dates = pd.date_range(end=end_date, periods=45, freq='D')
     
-    data = []
+    rows = []
     for date in dates:
-        for region in regions:
-            # Base price varies by region
-            base_price = {
-                'DKI Jakarta': 38000,
-                'Jawa Barat': 33000,
-                'Jawa Timur': 31000,
-                'Banten': 34000,
-                'Papua': 42000,
-                'Sumatera Utara': 31000,
-                'Sulawesi Selatan': 28000,
-                'Bali': 37000
-            }
+        for region, info in regions.items():
+            base_price = info[2]
+            # Simulate trend + randomness
+            day_effect = np.sin(date.dayofyear / 5) * 1000
+            price = base_price + day_effect + np.random.randint(-1500, 1500)
             
-            # Add some randomness
-            price = base_price[region] + np.random.randint(-2000, 2000)
-            
-            # Determine status
-            if price > 40000:
-                status = 'Waspada'
-            else:
-                status = 'Stabil'
-            
-            data.append({
+            rows.append({
                 'Tanggal': date,
                 'Wilayah': region,
-                'Harga': price,
-                'Status': status
+                'Lat': info[0],
+                'Lon': info[1],
+                'Harga': round(price, -2)
             })
     
-    return pd.DataFrame(data)
+    df = pd.DataFrame(rows)
+    # Calculate previous price for delta
+    df = df.sort_values(['Wilayah', 'Tanggal'])
+    df['Prev_Harga'] = df.groupby('Wilayah')['Harga'].shift(1)
+    return df
 
-# Load data
-df = generate_sample_data()
+df_full = load_market_data()
 
-# Sidebar
+# --- SIDEBAR FILTERS ---
 with st.sidebar:
     st.markdown("""
-    <div style='padding: 1rem 0;'>
-        <div style='display: flex; align-items: center; gap: 0.75rem; margin-bottom: 2rem;'>
-            <div style='width: 2.5rem; height: 2.5rem; background: #1B4332; border-radius: 0.5rem; 
-                       display: flex; align-items: center; justify-content: center; font-size: 1.5rem;'>🐔</div>
-            <div>
-                <h3 style='color: white; margin: 0; font-size: 1.125rem;'>Daging Ayam Ras</h3>
-                <p style='color: #86AF99; margin: 0; font-size: 0.625rem; text-transform: uppercase; 
-                         letter-spacing: 0.1em; font-weight: 700;'>Market Intelligence</p>
-            </div>
-        </div>
+    <div style='padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;'>
+        <h3 style='margin:0'>🐔 AGRI-INTEL</h3>
+        <p style='color: #86AF99; font-size: 10px; margin:0; font-weight:700;'>INDONESIA POULTRY TRACKER</p>
     </div>
     """, unsafe_allow_html=True)
     
-    st.markdown("<p style='color: #9CA3AF; font-size: 0.625rem; text-transform: uppercase; "
-                "letter-spacing: 0.05em; font-weight: 700; margin: 1rem 0 0.5rem 0;'>TIMEFRAME</p>", 
-                unsafe_allow_html=True)
+    st.subheader("Konfigurasi Analisis")
     
-    min_date = df['Tanggal'].min()
-    max_date = df['Tanggal'].max()
-    
+    # Date Range
     date_range = st.date_input(
-        "Pilih Rentang Tanggal",
-        value=(min_date.date(), max_date.date()),
-        min_value=min_date.date(),
-        max_value=max_date.date(),
-        label_visibility="collapsed"
+        "Rentang Waktu",
+        value=(df_full['Tanggal'].min().date(), df_full['Tanggal'].max().date()),
+        min_value=df_full['Tanggal'].min().date(),
+        max_value=df_full['Tanggal'].max().date()
     )
     
-    st.markdown("<p style='color: #9CA3AF; font-size: 0.625rem; text-transform: uppercase; "
-                "letter-spacing: 0.05em; font-weight: 700; margin: 1.5rem 0 0.5rem 0;'>FILTER REGIONS</p>", 
-                unsafe_allow_html=True)
+    # Threshold Slider
+    threshold = st.slider("Ambang Batas Waspada (Rp)", 30000, 45000, 38000)
     
-    all_regions = sorted(df['Wilayah'].unique())
-    selected_regions = st.multiselect(
-        "Pilih Wilayah",
-        options=all_regions,
-        default=all_regions[:4],
-        label_visibility="collapsed"
-    )
+    # Region Filter
+    all_regions = sorted(df_full['Wilayah'].unique())
+    selected_regions = st.multiselect("Filter Wilayah", all_regions, default=all_regions[:5])
     
-    st.markdown("<div style='margin-top: 3rem;'></div>", unsafe_allow_html=True)
-    
-    if st.button("🔄 Refresh Live Data", use_container_width=True):
+    st.markdown("---")
+    if st.button("🔄 Perbarui Data"):
         st.cache_data.clear()
         st.rerun()
 
-# Apply filters
+# --- DATA PROCESSING ---
 if len(date_range) == 2:
-    start_date, end_date = date_range
-    filtered_df = df[(df['Tanggal'] >= pd.Timestamp(start_date)) & 
-                    (df['Tanggal'] <= pd.Timestamp(end_date))]
+    start, end = pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1])
+    mask = (df_full['Tanggal'] >= start) & (df_full['Tanggal'] <= end)
+    df = df_full[mask].copy()
 else:
-    filtered_df = df
+    df = df_full.copy()
 
 if selected_regions:
-    filtered_df = filtered_df[filtered_df['Wilayah'].isin(selected_regions)]
+    df = df[df['Wilayah'].isin(selected_regions)]
 
-# Main content
-st.markdown("""
-<div style='margin-bottom: 2rem;'>
-    <div style='display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;'>
-        <div style='width: 0.5rem; height: 0.5rem; background: #16A34A; border-radius: 50%; 
-                   animation: pulse 2s infinite;'></div>
-        <span style='font-size: 0.75rem; font-weight: 700; color: #414844; text-transform: uppercase; 
-                    letter-spacing: 0.05em;'>Market Live</span>
-    </div>
-    <h1 class='main-title'>Dashboard Harga Daging Ayam Ras</h1>
-    <p class='subtitle'>Laporan analisis harga komoditas harian seluruh wilayah Indonesia.</p>
-</div>
-""", unsafe_allow_html=True)
+# Add dynamic status
+df['Status'] = df['Harga'].apply(lambda x: 'Waspada' if x > threshold else 'Stabil')
 
-# Metric cards
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    avg_price = filtered_df['Harga'].mean()
+# --- HEADER SECTION ---
+col_h1, col_h2 = st.columns([3, 1])
+with col_h1:
     st.markdown(f"""
-    <div class='metric-card metric-card-average'>
-        <div class='metric-label'>Rata-rata Harga Nasional</div>
-        <div class='metric-value'>Rp {avg_price:,.0f}</div>
-        <div style='display: flex; align-items: center; gap: 0.25rem; margin-top: 0.5rem; 
-                    color: #16A34A; font-size: 0.75rem; font-weight: 700;'>
-            <span>↑</span><span>+2.4% MoM</span>
+    <div>
+        <div style='display:flex; align-items:center; gap:10px;'>
+            <div class='pulse'></div>
+            <span style='color:var(--neutral); font-weight:700; font-size:12px; letter-spacing:1px;'>LIVE MARKET DATA</span>
+        </div>
+        <h1 style='color:var(--primary); font-weight:800; margin:0; font-size:2.5rem;'>Harga Daging Ayam Ras</h1>
+        <p style='color:var(--neutral); margin-top:5px;'>Analisis real-time komoditas pangan nasional berbasis data SP2KP.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- METRIC CARDS ---
+m1, m2, m3, m4 = st.columns(4)
+
+# Calculations
+avg_now = df[df['Tanggal'] == df['Tanggal'].max()]['Harga'].mean()
+avg_prev = df[df['Tanggal'] == df['Tanggal'].max()]['Prev_Harga'].mean()
+delta_pct = ((avg_now - avg_prev) / avg_prev) * 100
+
+with m1:
+    st.markdown(f"""
+    <div class='metric-card'>
+        <div class='card-label'>Rata-rata Nasional</div>
+        <div class='card-value'>Rp {avg_now:,.0f}</div>
+        <div class='card-delta {'delta-up' if delta_pct > 0 else 'delta-down'}'>
+            {'▲' if delta_pct > 0 else '▼'} {abs(delta_pct):.1f}% (Daily)
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-with col2:
-    min_price = filtered_df['Harga'].min()
-    min_region = filtered_df.loc[filtered_df['Harga'].idxmin(), 'Wilayah']
+with m2:
+    peak_region = df.loc[df['Harga'].idxmax()]
     st.markdown(f"""
-    <div class='metric-card metric-card-low'>
-        <div class='metric-label'>Harga Terendah</div>
-        <div class='metric-value'>Rp {min_price:,.0f}</div>
-        <div class='metric-subtitle'>Wilayah: {min_region}</div>
+    <div class='metric-card'>
+        <div class='card-label'>Harga Tertinggi</div>
+        <div class='card-value'>Rp {peak_region['Harga']:,.0f}</div>
+        <div style='font-size:11px; color:var(--neutral); font-weight:600;'>📍 {peak_region['Wilayah']}</div>
     </div>
     """, unsafe_allow_html=True)
 
-with col3:
-    max_price = filtered_df['Harga'].max()
-    max_region = filtered_df.loc[filtered_df['Harga'].idxmax(), 'Wilayah']
+with m3:
+    count_waspada = len(df[(df['Tanggal'] == df['Tanggal'].max()) & (df['Status'] == 'Waspada')])
     st.markdown(f"""
-    <div class='metric-card metric-card-high'>
-        <div class='metric-label'>Harga Tertinggi</div>
-        <div class='metric-value'>Rp {max_price:,.0f}</div>
-        <div class='metric-subtitle'>Wilayah: {max_region}</div>
+    <div class='metric-card'>
+        <div class='card-label'>Wilayah Status Waspada</div>
+        <div class='card-value' style='color:var(--danger);'>{count_waspada}</div>
+        <div style='font-size:11px; color:var(--neutral); font-weight:600;'>Ambang Batas: Rp {threshold:,.0f}</div>
     </div>
     """, unsafe_allow_html=True)
 
-with col4:
-    total_records = len(filtered_df)
+with m4:
+    volatility = df.groupby('Tanggal')['Harga'].std().mean()
     st.markdown(f"""
-    <div class='metric-card metric-card-total'>
-        <div class='metric-label'>Total Record Data</div>
-        <div class='metric-value'>{total_records:,}</div>
-        <div class='metric-subtitle'>Syncing 2 minutes ago</div>
+    <div class='metric-card'>
+        <div class='card-label'>Indeks Volatilitas</div>
+        <div class='card-value'>{volatility/1000:.2f}</div>
+        <div style='font-size:11px; color:var(--neutral); font-weight:600;'>Tingkat Fluktuasi Harga</div>
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<div style='margin: 2rem 0;'></div>", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
-# Charts section
-col_chart1, col_chart2 = st.columns([2, 1])
+# --- MAIN VISUALS ---
+c1, c2 = st.columns([2, 1])
 
-with col_chart1:
-    st.markdown("""
-    <div class='chart-container'>
-        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;'>
-            <div>
-                <h3 style='color: #012D1D; font-size: 1.25rem; font-weight: 700; margin: 0; 
-                           display: flex; align-items: center; gap: 0.5rem;'>
-                    <span>📈</span> Tren Harga Over Time
-                </h3>
-                <p style='color: #414844; font-size: 0.875rem; margin: 0.25rem 0 0 0;'>
-                    Perbandingan harga harian 4 wilayah utama
-                </p>
-            </div>
-            <div style='display: flex; gap: 0.5rem;'>
-                <span style='padding: 0.25rem 0.75rem; background: #F3F4F5; border-radius: 9999px; 
-                            font-size: 0.625rem; font-weight: 700;'>7D</span>
-                <span style='padding: 0.25rem 0.75rem; background: #012D1D; color: white; 
-                            border-radius: 9999px; font-size: 0.625rem; font-weight: 700;'>1M</span>
-                <span style='padding: 0.25rem 0.75rem; background: #F3F4F5; border-radius: 9999px; 
-                            font-size: 0.625rem; font-weight: 700;'>3M</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+with c1:
+    st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
+    st.markdown("### 📈 Tren Harga & Moving Average")
     
-    if not filtered_df.empty:
-        fig_line = px.line(
-            filtered_df,
-            x='Tanggal',
-            y='Harga',
-            color='Wilayah',
-            labels={'Harga': 'Harga (Rp)', 'Tanggal': 'Tanggal'},
-            height=400,
-            color_discrete_sequence=['#8E4E14', '#012D1D', '#1B4332', '#16A34A']
-        )
-        fig_line.update_layout(
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font_family='Inter',
-            xaxis_title='',
-            yaxis_title='Harga (Rp)',
-            legend_title='Wilayah',
-            hovermode='x unified',
-            showlegend=True,
-            margin=dict(l=20, r=20, t=20, b=20),
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor='#E5E7EB')
-        )
-        st.plotly_chart(fig_line, use_container_width=True)
-
-with col_chart2:
-    st.markdown("""
-    <div class='chart-container'>
-        <h3 style='color: #012D1D; font-size: 1.25rem; font-weight: 700; margin: 0 0 1.5rem 0; 
-                   display: flex; align-items: center; gap: 0.5rem;'>
-            <span>📊</span> Rata-rata per Wilayah
-        </h3>
-    </div>
-    """, unsafe_allow_html=True)
+    fig_line = go.Figure()
     
-    if not filtered_df.empty:
-        avg_by_region = filtered_df.groupby('Wilayah')['Harga'].mean().reset_index()
-        avg_by_region = avg_by_region.sort_values('Harga', ascending=True)
-        
-        fig_bar = px.bar(
-            avg_by_region,
-            x='Harga',
-            y='Wilayah',
-            orientation='h',
-            labels={'Harga': '', 'Wilayah': ''},
-            color='Harga',
-            color_continuous_scale=['#16A34A', '#EAB308', '#DC2626'],
-            height=350
-        )
-        fig_bar.update_layout(
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font_family='Inter',
-            xaxis_title='Rata-rata Harga (Rp)',
-            yaxis_title='',
-            showlegend=False,
-            margin=dict(l=20, r=20, t=20, b=20),
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=False)
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-# Heatmap and Distribution
-col_heatmap, col_dist = st.columns(2)
-
-with col_heatmap:
-    st.markdown("""
-    <div class='chart-container'>
-        <h3 style='color: #012D1D; font-size: 1.25rem; font-weight: 700; margin: 0 0 1.5rem 0; 
-                   display: flex; align-items: center; gap: 0.5rem;'>
-            <span>🔥</span> Harga per Wilayah & Tanggal
-        </h3>
-    </div>
-    """, unsafe_allow_html=True)
+    # Group by date for national average
+    df_trend = df.groupby('Tanggal')['Harga'].mean().reset_index()
+    df_trend['MA7'] = df_trend['Harga'].rolling(window=7).mean()
     
-    if not filtered_df.empty:
-        pivot_df = filtered_df.pivot_table(
-            index='Wilayah',
-            columns='Tanggal',
-            values='Harga',
-            aggfunc='mean'
-        )
-        
-        fig_heatmap = px.imshow(
-            pivot_df,
-            labels=dict(x="Tanggal", y="Wilayah", color="Harga (Rp)"),
-            color_continuous_scale='RdYlGn_r',
-            aspect='auto',
-            height=300
-        )
-        fig_heatmap.update_layout(
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font_family='Inter',
-            margin=dict(l=20, r=20, t=20, b=60),
-            xaxis=dict(tickangle=-45)
-        )
-        st.plotly_chart(fig_heatmap, use_container_width=True)
-
-with col_dist:
-    st.markdown("""
-    <div class='chart-container'>
-        <h3 style='color: #012D1D; font-size: 1.25rem; font-weight: 700; margin: 0 0 1.5rem 0; 
-                   display: flex; align-items: center; gap: 0.5rem;'>
-            <span>📦</span> Distribusi Harga per Wilayah
-        </h3>
-    </div>
-    """, unsafe_allow_html=True)
+    fig_line.add_trace(go.Scatter(
+        x=df_trend['Tanggal'], y=df_trend['Harga'],
+        name="Rerata Nasional", line=dict(color='#012D1D', width=3)
+    ))
     
-    if not filtered_df.empty:
-        fig_box = px.box(
-            filtered_df,
-            x='Wilayah',
-            y='Harga',
-            labels={'Harga': 'Harga (Rp)', 'Wilayah': 'Wilayah'},
-            color='Wilayah',
-            height=300
-        )
-        fig_box.update_layout(
-            plot_bgcolor='white',
-            paper_bgcolor='white',
-            font_family='Inter',
-            xaxis_title='',
-            yaxis_title='Harga (Rp)',
-            showlegend=False,
-            margin=dict(l=20, r=20, t=20, b=60),
-            xaxis=dict(tickangle=-45, showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor='#E5E7EB')
-        )
-        st.plotly_chart(fig_box, use_container_width=True)
-
-# Data table
-st.markdown("""
-<div class='chart-container'>
-    <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;'>
-        <div>
-            <h3 style='color: #012D1D; font-size: 1.25rem; font-weight: 700; margin: 0;'>
-                Rincian Data Harga Harian
-            </h3>
-            <p style='color: #414844; font-size: 0.875rem; margin: 0.25rem 0 0 0;'>
-                Update terbaru dari 34 Provinsi di Indonesia
-            </p>
-        </div>
-        <div style='display: flex; gap: 0.5rem;'>
-            <button style='padding: 0.5rem; border: 1px solid #E5E7EB; border-radius: 0.5rem; 
-                          background: white; cursor: pointer;'>⚙️</button>
-            <button style='padding: 0.5rem; border: 1px solid #E5E7EB; border-radius: 0.5rem; 
-                          background: white; cursor: pointer;'>⋮</button>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Display data table
-if not filtered_df.empty:
-    display_df = filtered_df.sort_values('Tanggal', ascending=False).head(100)
+    fig_line.add_trace(go.Scatter(
+        x=df_trend['Tanggal'], y=df_trend['MA7'],
+        name="Trend (7-Day MA)", line=dict(color='#EAB308', width=2, dash='dot')
+    ))
     
-    # Format the dataframe for display
-    display_df['Harga'] = display_df['Harga'].apply(lambda x: f"Rp {x:,.0f}")
-    display_df['Tanggal'] = display_df['Tanggal'].dt.strftime('%d %B %Y')
-    
-    st.dataframe(
-        display_df[['Tanggal', 'Wilayah', 'Harga', 'Status']],
-        use_container_width=True,
-        height=400,
-        hide_index=True
+    # Add individual regions as faint lines
+    for region in selected_regions:
+        reg_data = df[df['Wilayah'] == region]
+        fig_line.add_trace(go.Scatter(
+            x=reg_data['Tanggal'], y=reg_data['Harga'],
+            name=region, opacity=0.3, line=dict(width=1),
+            visible='legendonly'
+        ))
+
+    fig_line.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=20, b=0), height=400,
+        hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    
-    # Download button
-    csv = filtered_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download Data sebagai CSV",
-        data=csv,
-        file_name='data_harga_ayam.csv',
-        mime='text/csv',
-        use_container_width=True
-    )
+    fig_line.update_yaxes(gridcolor='#F1F5F9')
+    st.plotly_chart(fig_line, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# Footer
+with c2:
+    st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
+    st.markdown("### 🗺️ Sebaran Spasial")
+    
+    # Latest data for map
+    df_map = df[df['Tanggal'] == df['Tanggal'].max()]
+    
+    fig_map = px.scatter_mapbox(
+        df_map, lat="Lat", lon="Lon", color="Harga", size="Harga",
+        hover_name="Wilayah", color_continuous_scale="RdYlGn_r",
+        size_max=15, zoom=3.5, mapbox_style="carto-positron"
+    )
+    fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=400, showlegend=False)
+    st.plotly_chart(fig_map, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# --- SECONDARY VISUALS ---
+c3, c4 = st.columns(2)
+
+with c3:
+    st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
+    st.markdown("### 📊 Perbandingan Harga per Wilayah")
+    avg_reg = df.groupby('Wilayah')['Harga'].mean().sort_values(ascending=True).reset_index()
+    fig_bar = px.bar(
+        avg_reg, x='Harga', y='Wilayah', orientation='h',
+        color='Harga', color_continuous_scale="Greens"
+    )
+    fig_bar.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=10, b=0), height=300, showlegend=False
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with c4:
+    st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
+    st.markdown("### 🌡️ Heatmap Intensitas Harga")
+    pivot = df.pivot_table(index='Wilayah', columns=df['Tanggal'].dt.strftime('%d %b'), values='Harga')
+    fig_heat = px.imshow(pivot, color_continuous_scale="YlOrRd")
+    fig_heat.update_layout(
+        margin=dict(l=0, r=0, t=10, b=0), height=300
+    )
+    st.plotly_chart(fig_heat, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# --- DATA TABLE WITH CONDITIONAL FORMATTING ---
+st.markdown("### 📋 Rincian Data Harian")
+
+# Formatting for display
+display_df = df.sort_values(['Tanggal', 'Harga'], ascending=[False, False]).head(20)
+
+def style_status(val):
+    if val == 'Waspada':
+        return 'color: #991B1B; background-color: #FEE2E2; font-weight: bold;'
+    return 'color: #166534; background-color: #DCFCE7; font-weight: bold;'
+
+# Final processing for table
+table_df = display_df[['Tanggal', 'Wilayah', 'Harga', 'Status']].copy()
+table_df['Tanggal'] = table_df['Tanggal'].dt.strftime('%Y-%m-%d')
+
+st.dataframe(
+    table_df.style.applymap(style_status, subset=['Status'])
+    .format({'Harga': 'Rp {:,.0f}'}),
+    use_container_width=True,
+    hide_index=True
+)
+
+# --- EXPORT ---
+csv = df.to_csv(index=False).encode('utf-8')
+st.download_button(
+    "📥 Download Laporan Lengkap (CSV)",
+    csv,
+    "laporan_harga_ayam.csv",
+    "text/csv",
+    use_container_width=True
+)
+
 st.markdown("""
-<div style='margin-top: 3rem; text-align: center; padding: 2rem; color: #414844; font-size: 0.875rem;'>
-    <h4 style='color: #012D1D; font-weight: 800; margin: 0 0 0.5rem 0;'>Dashboard Harga Daging Ayam Ras</h4>
-    <p style='margin: 0; font-size: 0.75rem;'>
-        Data sourced from Sistem Pemantauan Pasar dan Kebutuhan Pokok (SP2KP). 
-        © 2024 Agrarian Intelligence.
-    </p>
+<div style='text-align: center; color: #94A3B8; font-size: 12px; margin-top: 50px; padding: 20px;'>
+    Market Intelligence Dashboard v2.0 • Data diperbarui setiap 24 jam • © 2024 Agrarian Intelligence Corp.
 </div>
 """, unsafe_allow_html=True)
