@@ -54,13 +54,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- FUNGSI PEMUATAN DATA CERDAS ---
+# --- FUNGSI PEMUATAN DATA ANTI-GAGAL ---
 @st.cache_data
 def load_all_data():
     base_search_path = "."
     files = []
     
-    # 1. Kumpulkan semua file CSV dan XLSX
     for root, dirs, filenames in os.walk(base_search_path):
         if '/.' in root or '\\.' in root or 'venv' in root or '__pycache__' in root:
             continue
@@ -72,83 +71,99 @@ def load_all_data():
         raise FileNotFoundError("TIDAK ADA file .xlsx atau .csv ditemukan di direktori aplikasi!")
 
     all_data = []
-    file_errors = [] # Variabel untuk melacak pesan error secara spesifik
+    file_errors = []
     
     for file in files:
+        df = None
+        err = None
         try:
-            # Membaca file sebagai raw text array (tanpa asumsi header)
+            # 1. BACA JIKA FORMATNYA CSV
             if file.endswith('.csv'):
-                df_raw = pd.read_csv(file, header=None, dtype=str, on_bad_lines='skip')
-            else:
-                df_raw = pd.read_excel(file, header=None, dtype=str)
+                # Baca manual baris per baris tanpa Pandas terlebih dahulu
+                with open(file, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()
                 
-            # Mencari baris mana yang merupakan Header ("Wilayah")
-            header_idx = -1
-            for i in range(min(20, len(df_raw))): 
-                row_str = " ".join([str(val).lower() for val in df_raw.iloc[i].values])
-                if 'wilayah' in row_str:
-                    header_idx = i
-                    break
+                header_idx = -1
+                for i, line in enumerate(lines[:30]):
+                    if 'wilayah' in line.lower():
+                        header_idx = i
+                        break
+                        
+                if header_idx != -1:
+                    # Kita perintahkan Pandas mulai membaca dari baris 'Wilayah', abaikan judul atasnya
+                    df = pd.read_csv(file, skiprows=header_idx, dtype=str)
                     
-            if header_idx == -1:
-                file_errors.append(f"{os.path.basename(file)}: Gagal mencari kata 'Wilayah' di 20 baris pertama.")
-                continue
-                
-            # Tarik nama kolom dari baris yang ditemukan
-            raw_columns = df_raw.iloc[header_idx].astype(str).tolist()
-            
-            # PEMBERSIHAN KOLOM: Menghindari error pandas "Duplicate/NaN columns" akibat sisa koma di CSV
-            cleaned_cols = []
-            for idx, c in enumerate(raw_columns):
-                c_clean = c.strip()
-                # Jika sel di excel/csv kosong, tandai sebagai sampah untuk dibuang
-                if c_clean.lower() == 'nan' or c_clean == '' or c_clean == 'none':
-                    cleaned_cols.append(f"hapus_kolom_{idx}")
+                    # Buang kolom 'Unnamed:' atau koma sisa yang kosong di ujung file CSV
+                    cols_to_drop = [c for c in df.columns if 'unnamed' in str(c).lower() or pd.isna(c)]
+                    df = df.drop(columns=cols_to_drop)
                 else:
-                    cleaned_cols.append(c_clean)
+                    err = "Kata 'Wilayah' tidak ditemukan di 30 baris pertama (CSV)."
                     
-            df_raw.columns = cleaned_cols
-            df = df_raw.iloc[header_idx + 1:].copy()
-            
-            # Buang semua kolom sampah berlebih
-            cols_to_drop = [c for c in df.columns if c.startswith('hapus_kolom_')]
-            df = df.drop(columns=cols_to_drop)
-            
-            # Pastikan nama kolom Wilayah tertulis sempurna
-            wilayah_col = [c for c in df.columns if 'wilayah' in c.lower()][0]
-            df = df.rename(columns={wilayah_col: 'Wilayah'})
-            
-            # Buang teks "Sumber Data : SP2KP" di baris paling bawah
-            df = df.dropna(subset=['Wilayah'])
-            df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data|Laporan|Periode', case=False, na=False)]
-            
-            # Unpivot Data (Tanggal menjadi satu kolom ke bawah)
-            date_columns = [c for c in df.columns if c != 'Wilayah']
-            df_melted = pd.melt(
-                df, id_vars=['Wilayah'], value_vars=date_columns, 
-                var_name='Tanggal', value_name='Harga'
-            )
-
-            # Parsing Tipe Data
-            df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
-            df_melted['Harga'] = df_melted['Harga'].astype(str).str.replace(r'[^\d]', '', regex=True)
-            df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
-            df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
-
-            # Bersihkan data kosong / Harga 0
-            df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
-            df_melted = df_melted[df_melted['Harga'] > 0]
-            
-            if not df_melted.empty:
-                all_data.append(df_melted)
-            else:
-                file_errors.append(f"{os.path.basename(file)}: Tersaring habis. Cek apakah ada angka harga valid yang tertulis.")
-                
+            # 2. BACA JIKA FORMATNYA EXCEL (.XLSX)
+            elif file.endswith('.xlsx'):
+                xls = pd.ExcelFile(file)
+                found = False
+                for sheet_name in xls.sheet_names:
+                    df_raw = pd.read_excel(file, sheet_name=sheet_name, header=None, dtype=str)
+                    header_idx = -1
+                    for i in range(min(30, len(df_raw))): 
+                        row_str = " ".join([str(val).lower() for val in df_raw.iloc[i].values])
+                        if 'wilayah' in row_str:
+                            header_idx = i
+                            break
+                    if header_idx != -1:
+                        df_raw.columns = df_raw.iloc[header_idx].astype(str).tolist()
+                        df = df_raw.iloc[header_idx + 1:].copy()
+                        
+                        cols_to_drop = [c for c in df.columns if 'nan' in str(c).lower() or str(c).strip() == '']
+                        df = df.drop(columns=cols_to_drop)
+                        found = True
+                        break
+                if not found:
+                    err = "Kata 'Wilayah' tidak ditemukan di seluruh sheet (XLSX)."
+                    
         except Exception as e:
-            file_errors.append(f"{os.path.basename(file)}: ERROR PYTHON -> {str(e)}")
+            err = f"ERROR PYTHON -> {str(e)}"
+            
+        # 3. PROSES DATA JIKA BERHASIL DIBACA
+        if df is not None and not df.empty:
+            try:
+                # Pastikan nama kolom Wilayah tertulis sempurna
+                wilayah_col = [c for c in df.columns if 'wilayah' in str(c).lower()][0]
+                df = df.rename(columns={wilayah_col: 'Wilayah'})
+                
+                # Buang teks metadata pemerintah di baris paling bawah
+                df = df.dropna(subset=['Wilayah'])
+                df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data|Laporan|Periode', case=False, na=False)]
+                
+                # Unpivot Data (Lebarkan tanggal menjadi kolom)
+                date_columns = [c for c in df.columns if c != 'Wilayah']
+                df_melted = pd.melt(
+                    df, id_vars=['Wilayah'], value_vars=date_columns, 
+                    var_name='Tanggal', value_name='Harga'
+                )
+
+                # Parsing Tipe Data
+                df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
+                df_melted['Harga'] = df_melted['Harga'].astype(str).str.replace(r'[^\d]', '', regex=True)
+                df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
+                df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
+
+                # Bersihkan data kosong / Harga 0
+                df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
+                df_melted = df_melted[df_melted['Harga'] > 0]
+                
+                if not df_melted.empty:
+                    all_data.append(df_melted)
+                else:
+                    file_errors.append(f"{os.path.basename(file)}: Tersaring habis. Cek validitas angka harga.")
+            except Exception as e:
+                file_errors.append(f"{os.path.basename(file)}: Gagal parsing tabel -> {str(e)}")
+        else:
+            if err:
+                file_errors.append(f"{os.path.basename(file)}: {err}")
 
     if not all_data:
-        # Jika benar-benar kosong, cetak di layar penyebab aslinya (sangat membantu debugging)
         error_msg = "Gagal memproses data valid dari file CSV/Excel Anda. Log rincian file yang bermasalah:\n"
         for err in file_errors:
             error_msg += f"- {err}\n"
@@ -156,7 +171,7 @@ def load_all_data():
 
     combined_df = pd.concat(all_data, ignore_index=True)
     
-    # Pencegah error map/peta
+    # Pencegah error peta 
     if 'Lat' not in combined_df.columns:
         combined_df['Lat'] = None
     if 'Lon' not in combined_df.columns:
