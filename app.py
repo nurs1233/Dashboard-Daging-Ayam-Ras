@@ -731,7 +731,8 @@ with tab_trend:
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-head'><h3>Tren Harga Interaktif</h3><span class='tag'>Scroll = zoom · Drag = pan · Double-click = reset</span></div>", unsafe_allow_html=True)
-    st.plotly_chart(fig, use_container_width=True,
+    # ✅ FIX: use_container_width + width="stretch" untuk hindari deprecation warning
+    st.plotly_chart(fig, use_container_width=True, width="stretch",
                     config={'scrollZoom':True,'displayModeBar':True,'modeBarButtonsToAdd':['drawline','eraseshape']})
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -782,19 +783,20 @@ with tab_disparity:
             marker_color='rgba(167,139,250,0.6)',
             hovertemplate='%{x|%d %b %Y}<br>Gini: %{y:.4f}<extra></extra>'), row=2, col=1)
 
-# Buat copy PLOTLY_BASE tanpa key yang akan di-override
-plotly_base_clean = {k: v for k, v in PLOTLY_BASE.items() 
-                     if k not in ('yaxis', 'yaxis2', 'legend')}
+        # ✅ FIX: Gunakan plotly_base_clean untuk hindari TypeError: multiple values for 'yaxis'
+        plotly_base_clean = {k: v for k, v in PLOTLY_BASE.items() 
+                             if k not in ('yaxis', 'yaxis2', 'legend')}
 
-fig_disp.update_layout(**plotly_base_clean, height=380,
-    yaxis=dict(**PLOTLY_BASE['yaxis'], title='Disparitas (Rp)', tickformat=',.0f'),
-    yaxis2=dict(**PLOTLY_BASE['yaxis'], title='Gini Index'),
-    legend=dict(**PLOTLY_BASE['legend']))
+        fig_disp.update_layout(**plotly_base_clean, height=380,
+            yaxis=dict(**PLOTLY_BASE['yaxis'], title='Disparitas (Rp)', tickformat=',.0f'),
+            yaxis2=dict(**PLOTLY_BASE['yaxis'], title='Gini Index'),
+            legend=dict(**PLOTLY_BASE['legend']))
+        # ✅ FIX: Indentasi benar - update_xaxes di luar update_layout
         fig_disp.update_xaxes(showgrid=False, tickfont=dict(size=9))
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.markdown("<div class='section-head'><h3>Disparitas Harga Harian & Indeks Gini</h3></div>", unsafe_allow_html=True)
-        st.plotly_chart(fig_disp, use_container_width=True)
+        st.plotly_chart(fig_disp, use_container_width=True, width="stretch")
         st.markdown("</div>", unsafe_allow_html=True)
 
     with dc2:
@@ -812,7 +814,7 @@ fig_disp.update_layout(**plotly_base_clean, height=380,
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.markdown("<div class='section-head'><h3>Top 10 Provinsi Paling Volatil</h3><span class='tag'>Std Dev harga</span></div>", unsafe_allow_html=True)
-        st.plotly_chart(fig_std, use_container_width=True)
+        st.plotly_chart(fig_std, use_container_width=True, width="stretch")
         st.markdown("</div>", unsafe_allow_html=True)
 
     if selected_regions and show_disparity:
@@ -836,7 +838,7 @@ fig_disp.update_layout(**plotly_base_clean, height=380,
             yaxis=dict(**PLOTLY_BASE['yaxis'], title='Indeks Disparitas (%)', ticksuffix='%'),
             xaxis=dict(**PLOTLY_BASE['xaxis']),
             hovermode='x unified')
-        st.plotly_chart(fig_di, use_container_width=True)
+        st.plotly_chart(fig_di, use_container_width=True, width="stretch")
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -919,7 +921,7 @@ with tab_map:
         with map_col1:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.markdown(f"<div class='section-head'><h3>Peta Sebaran — {map_metric}</h3></div>", unsafe_allow_html=True)
-            st.plotly_chart(fig_map, use_container_width=True)
+            st.plotly_chart(fig_map, use_container_width=True, width="stretch")
             st.markdown("</div>", unsafe_allow_html=True)
 
         with map_col2:
@@ -970,7 +972,7 @@ with tab_correlation:
 
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.markdown("<div class='section-head'><h3>Matriks Korelasi Pearson</h3><span class='tag'>20 Provinsi terlengkap datanya</span></div>", unsafe_allow_html=True)
-            st.plotly_chart(fig_corr, use_container_width=True)
+            st.plotly_chart(fig_corr, use_container_width=True, width="stretch")
             st.markdown("</div>", unsafe_allow_html=True)
 
         with corr_col2:
@@ -1016,7 +1018,7 @@ with tab_correlation:
                     xaxis=dict(**PLOTLY_BASE['xaxis'], range=[0,1]),
                     yaxis=dict(**PLOTLY_BASE['yaxis'], categoryorder='total ascending'),
                     showlegend=False, margin=dict(l=0,r=10,t=5,b=5))
-                st.plotly_chart(fig_nc, use_container_width=True)
+                st.plotly_chart(fig_nc, use_container_width=True, width="stretch")
             st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("Data tidak cukup untuk korelasi. Perluas rentang tanggal.")
@@ -1050,7 +1052,7 @@ with tab_analysis:
         fig_rsi.update_layout(**PLOTLY_BASE, height=250,
             yaxis=dict(**PLOTLY_BASE['yaxis'], range=[0,100], title='RSI'),
             xaxis=dict(**PLOTLY_BASE['xaxis']))
-        st.plotly_chart(fig_rsi, use_container_width=True)
+        st.plotly_chart(fig_rsi, use_container_width=True, width="stretch")
         st.markdown("</div>", unsafe_allow_html=True)
 
     with an2:
@@ -1078,7 +1080,7 @@ with tab_analysis:
         fig_hist.update_layout(**PLOTLY_BASE, height=250, barmode='overlay',
             xaxis=dict(**PLOTLY_BASE['xaxis'], tickformat=',.0f', title='Harga (Rp)'),
             yaxis=dict(**PLOTLY_BASE['yaxis'], title='Frekuensi'))
-        st.plotly_chart(fig_hist, use_container_width=True)
+        st.plotly_chart(fig_hist, use_container_width=True, width="stretch")
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
@@ -1108,7 +1110,7 @@ with tab_analysis:
             xaxis=dict(showgrid=False, tickfont=dict(size=10)),
             yaxis=dict(showgrid=False, tickfont=dict(size=10)),
             margin=dict(l=10,r=10,t=5,b=5))
-        st.plotly_chart(fig_heat, use_container_width=True)
+        st.plotly_chart(fig_heat, use_container_width=True, width="stretch")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
