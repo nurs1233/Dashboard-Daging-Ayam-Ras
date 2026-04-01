@@ -1,74 +1,99 @@
-# data_loader.py
-import os
 import pandas as pd
-import streamlit as st
+import os
 
-@st.cache_data
-def load_all_data(data_folder="Data"):
+def load_all_data(data_folder="."):
     """
-    Load semua file .xlsx dan .csv dari folder data_folder
-    Returns: DataFrame gabungan atau DataFrame kosong jika tidak ada file
+    Load all Excel/CSV files from the application.
+    Menggunakan pencarian rekursif (os.walk) agar kebal terhadap error 
+    case-sensitivity di Streamlit Cloud (Linux).
     """
-    all_dfs = []
-    
-    # Cek apakah folder ada
-    if not os.path.exists(data_folder):
-        st.warning(f"⚠️ Folder '{data_folder}' tidak ditemukan!")
-        return pd.DataFrame()
-    
-    # List semua file di folder
-    files = os.listdir(data_folder)
-    
-    # Filter file Excel dan CSV
-    excel_files = [f for f in files if f.endswith('.xlsx') or f.endswith('.xls')]
-    csv_files = [f for f in files if f.endswith('.csv')]
-    
-    if not excel_files and not csv_files:
-        st.warning(f"⚠️ Tidak ada file .xlsx atau .csv di folder '{data_folder}'")
-        return pd.DataFrame()
-    
-    # Process Excel files
-    for file in excel_files:
-        try:
-            file_path = os.path.join(data_folder, file)
-            # skiprows=3 disesuaikan dengan struktur file Anda
-            df = pd.read_excel(file_path, skiprows=3)
-            df['source_file'] = file  # Tandai sumber file
-            all_dfs.append(df)
-            st.success(f"✅ Loaded: {file}")
-        except Exception as e:
-            st.error(f"❌ Error membaca {file}: {str(e)}")
+    # Mundur ke root folder jika app.py mengirim path dengan embel-embel /Data
+    base_search_path = data_folder
+    if data_folder.endswith("Data") or data_folder.endswith("data"):
+        base_search_path = os.path.dirname(data_folder)
+        
+    # Jika masih string kosong, paksa ke current directory
+    if not base_search_path:
+        base_search_path = "."
+
+    # 1. Cari semua file CSV dan XLSX di seluruh sub-folder
+    files = []
+    for root, dirs, filenames in os.walk(base_search_path):
+        # Abaikan folder sistem/hidden agar pencarian cepat
+        if '/.' in root or '\\.' in root or 'venv' in root or '__pycache__' in root:
             continue
+        for f in filenames:
+            if f.endswith('.csv') or f.endswith('.xlsx'):
+                files.append(os.path.join(root, f))
     
-    # Process CSV files
-    for file in csv_files:
+    if not files:
+        # Tampilkan isi folder root untuk mempermudah debugging jika file benar-benar tidak ada
         try:
-            file_path = os.path.join(data_folder, file)
-            df = pd.read_csv(file_path, skiprows=3)
-            df['source_file'] = file
-            all_dfs.append(df)
-            st.success(f"✅ Loaded: {file}")
+            available_items = os.listdir(base_search_path)
+            raise FileNotFoundError(f"TIDAK ADA file .xlsx atau .csv! Isi folder '{base_search_path}' saat ini: {available_items}")
         except Exception as e:
-            st.error(f"❌ Error membaca {file}: {str(e)}")
+            raise FileNotFoundError(f"Gagal melacak direktori. Pastikan Anda sudah mengunggah file data ke GitHub. Error: {e}")
+
+    # 2. Proses semua file yang ditemukan
+    all_data = []
+    for file in files:
+        # Skip 3 baris pertama (metadata text dari sumber data)
+        try:
+            if file.endswith('.csv'):
+                df = pd.read_csv(file, skiprows=3)
+            else:
+                df = pd.read_excel(file, skiprows=3)
+        except Exception as e:
+            print(f"Gagal membaca {file}: {e}")
             continue
+
+        if df.empty:
+            continue
+
+        # Deteksi kolom 'Wilayah' (case insensitive)
+        if 'Wilayah' not in df.columns:
+            wilayah_col = [c for c in df.columns if 'wilayah' in str(c).lower()]
+            if wilayah_col:
+                df = df.rename(columns={wilayah_col[0]: 'Wilayah'})
+            else:
+                continue
+
+        # Cleansing baris non-data ("Sumber Data : SP2KP...")
+        df = df.dropna(subset=['Wilayah'])
+        df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data', case=False, na=False)]
+        
+        # Melt data: Wide (tanggal di kolom) -> Long (tanggal jadi baris)
+        date_columns = [col for col in df.columns if col != 'Wilayah' and not str(col).startswith('Unnamed')]
+        df_melted = pd.melt(
+            df, id_vars=['Wilayah'], value_vars=date_columns, 
+            var_name='Tanggal', value_name='Harga'
+        )
+
+        # Standardisasi data
+        df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
+        if df_melted['Harga'].dtype == 'object':
+            df_melted['Harga'] = df_melted['Harga'].astype(str).str.replace(',', '').str.replace('.', '')
+            
+        df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
+        df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
+
+        # Buang baris invalid & harga 0
+        df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
+        df_melted = df_melted[df_melted['Harga'] > 0]
+        
+        if not df_melted.empty:
+            all_data.append(df_melted)
+
+    # 3. Validasi akhir sebelum return
+    if not all_data:
+        raise ValueError(f"File ditemukan, tapi tidak ada data yang valid untuk dibaca. File yg di-scan: {[os.path.basename(f) for f in files]}")
+
+    combined_df = pd.concat(all_data, ignore_index=True)
     
-    # Gabungkan semua dataframe
-    if all_dfs:
-        combined_df = pd.concat(all_dfs, ignore_index=True)
-        st.info(f"📊 Total data: {len(combined_df)} baris dari {len(all_dfs)} file")
-        return combined_df
-    else:
-        return pd.DataFrame()
-
-
-@st.cache_data
-def load_single_file(file_path):
-    """
-    Load satu file Excel/CSV secara individual
-    """
-    if file_path.endswith('.xlsx') or file_path.endswith('.xls'):
-        return pd.read_excel(file_path, skiprows=3)
-    elif file_path.endswith('.csv'):
-        return pd.read_csv(file_path, skiprows=3)
-    else:
-        raise ValueError("Format file tidak didukung")
+    # 4. Injeksi kolom Lat/Lon kosong untuk mencegah error st.map/plotly map di app.py
+    if 'Lat' not in combined_df.columns:
+        combined_df['Lat'] = None
+    if 'Lon' not in combined_df.columns:
+        combined_df['Lon'] = None
+        
+    return combined_df
