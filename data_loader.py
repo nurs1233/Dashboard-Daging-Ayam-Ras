@@ -1,78 +1,74 @@
-import pandas as pd
-import glob
+# data_loader.py
 import os
+import pandas as pd
+import streamlit as st
 
+@st.cache_data
 def load_all_data(data_folder="Data"):
     """
-    Load all Excel/CSV files from the specified folder.
-    Automatically detects 'Wilayah' and melts date columns into rows.
+    Load semua file .xlsx dan .csv dari folder data_folder
+    Returns: DataFrame gabungan atau DataFrame kosong jika tidak ada file
     """
-    # Deteksi file .xlsx dan .csv
-    pattern_xlsx = os.path.join(data_folder, "*.xlsx")
-    pattern_csv = os.path.join(data_folder, "*.csv")
-    files = glob.glob(pattern_xlsx) + glob.glob(pattern_csv)
+    all_dfs = []
     
-    if not files:
-        raise FileNotFoundError(f"Tidak ada file .xlsx atau .csv ditemukan di folder '{data_folder}'.")
-
-    all_data = []
-    for file in files:
-        # Baca file dan skip 3 baris pertama karena merupakan judul/metadata laporan
+    # Cek apakah folder ada
+    if not os.path.exists(data_folder):
+        st.warning(f"⚠️ Folder '{data_folder}' tidak ditemukan!")
+        return pd.DataFrame()
+    
+    # List semua file di folder
+    files = os.listdir(data_folder)
+    
+    # Filter file Excel dan CSV
+    excel_files = [f for f in files if f.endswith('.xlsx') or f.endswith('.xls')]
+    csv_files = [f for f in files if f.endswith('.csv')]
+    
+    if not excel_files and not csv_files:
+        st.warning(f"⚠️ Tidak ada file .xlsx atau .csv di folder '{data_folder}'")
+        return pd.DataFrame()
+    
+    # Process Excel files
+    for file in excel_files:
         try:
-            if file.endswith('.csv'):
-                df = pd.read_csv(file, skiprows=3)
-            else:
-                df = pd.read_excel(file, skiprows=3)
+            file_path = os.path.join(data_folder, file)
+            # skiprows=3 disesuaikan dengan struktur file Anda
+            df = pd.read_excel(file_path, skiprows=3)
+            df['source_file'] = file  # Tandai sumber file
+            all_dfs.append(df)
+            st.success(f"✅ Loaded: {file}")
         except Exception as e:
-            print(f"Gagal membaca file {file}: {e}")
+            st.error(f"❌ Error membaca {file}: {str(e)}")
             continue
-
-        if df.empty:
-            print(f"File {file} kosong, dilewati.")
-            continue
-
-        # Validasi minimal ada kolom 'Wilayah'
-        if 'Wilayah' not in df.columns:
-            print(f"File {file} tidak memiliki kolom 'Wilayah'. Dilewati.")
-            continue
-
-        # Cleansing baris non-data (misal teks "Sumber Data : ...") di baris bawah
-        df = df.dropna(subset=['Wilayah'])
-        df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data', case=False, na=False)]
-        
-        # Melt data: Ubah dari Wide format (tanggal sebagai kolom) ke Long format
-        # Ambil semua nama kolom kecuali 'Wilayah' dan kolom-kolom 'Unnamed' (sisa koma di csv)
-        date_columns = [col for col in df.columns if col != 'Wilayah' and not str(col).startswith('Unnamed')]
-        
-        df_melted = pd.melt(
-            df, 
-            id_vars=['Wilayah'], 
-            value_vars=date_columns, 
-            var_name='Tanggal', 
-            value_name='Harga'
-        )
-
-        # Konversi tipe data
-        df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
-        df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
-        df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
-
-        # Cleansing: Hapus baris dengan tanggal/harga yang tidak valid, atau harga = 0
-        sebelum = len(df_melted)
-        df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
-        df_melted = df_melted[df_melted['Harga'] > 0]  # Abaikan harga 0
-        setelah = len(df_melted)
-        
-        if setelah < sebelum:
-            print(f"File {os.path.basename(file)}: menghapus {sebelum - setelah} baris data kosong/0.")
-
-        if not df_melted.empty:
-            all_data.append(df_melted)
-
-    if not all_data:
-        raise ValueError("Tidak ada data yang berhasil dimuat. Periksa struktur file data Anda.")
-
-    # Gabungkan semua data dari semua file
-    combined_df = pd.concat(all_data, ignore_index=True)
     
-    return combined_df
+    # Process CSV files
+    for file in csv_files:
+        try:
+            file_path = os.path.join(data_folder, file)
+            df = pd.read_csv(file_path, skiprows=3)
+            df['source_file'] = file
+            all_dfs.append(df)
+            st.success(f"✅ Loaded: {file}")
+        except Exception as e:
+            st.error(f"❌ Error membaca {file}: {str(e)}")
+            continue
+    
+    # Gabungkan semua dataframe
+    if all_dfs:
+        combined_df = pd.concat(all_dfs, ignore_index=True)
+        st.info(f"📊 Total data: {len(combined_df)} baris dari {len(all_dfs)} file")
+        return combined_df
+    else:
+        return pd.DataFrame()
+
+
+@st.cache_data
+def load_single_file(file_path):
+    """
+    Load satu file Excel/CSV secara individual
+    """
+    if file_path.endswith('.xlsx') or file_path.endswith('.xls'):
+        return pd.read_excel(file_path, skiprows=3)
+    elif file_path.endswith('.csv'):
+        return pd.read_csv(file_path, skiprows=3)
+    else:
+        raise ValueError("Format file tidak didukung")
