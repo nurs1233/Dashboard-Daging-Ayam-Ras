@@ -1,119 +1,78 @@
 import pandas as pd
 import glob
 import os
-import re
-import numpy as np
 
 def load_all_data(data_folder="Data"):
     """
-    Load all Excel files, detect columns, clean data, and combine.
+    Load all Excel/CSV files from the specified folder.
+    Automatically detects 'Wilayah' and melts date columns into rows.
     """
-    pattern = os.path.join(data_folder, "*.xlsx")
-    files = glob.glob(pattern)
+    # Deteksi file .xlsx dan .csv
+    pattern_xlsx = os.path.join(data_folder, "*.xlsx")
+    pattern_csv = os.path.join(data_folder, "*.csv")
+    files = glob.glob(pattern_xlsx) + glob.glob(pattern_csv)
     
     if not files:
-        raise FileNotFoundError(f"Tidak ada file Excel (*.xlsx) ditemukan di folder '{data_folder}'.")
+        raise FileNotFoundError(f"Tidak ada file .xlsx atau .csv ditemukan di folder '{data_folder}'.")
 
     all_data = []
-    
-    # Regex lebih fleksibel: menerima 1 atau lebih underscore/pemisah
-    date_pattern = re.compile(r'(\d{8})[_-]+(\d{8})')
-
     for file in files:
+        # Baca file dan skip 3 baris pertama karena merupakan judul/metadata laporan
         try:
-            # Tambahkan engine='openpyxl' untuk memastikan kompatibilitas .xlsx
-            df = pd.read_excel(file, engine='openpyxl') 
+            if file.endswith('.csv'):
+                df = pd.read_csv(file, skiprows=3)
+            else:
+                df = pd.read_excel(file, skiprows=3)
         except Exception as e:
-            print(f"[ERROR] Gagal membaca file {file}: {e}")
+            print(f"Gagal membaca file {file}: {e}")
             continue
 
         if df.empty:
-            print(f"[SKIP] File {file} kosong.")
+            print(f"File {file} kosong, dilewati.")
             continue
 
-        # 1. Bersihkan nama kolom (strip spasi)
-        df.columns = df.columns.str.strip()
-
-        # 2. Deteksi kolom (Ambil yang PERTAMA ditemukan untuk menghindari ambiguitas)
-        col_mapping = {}
-        keywords = {
-            'tanggal': ['tanggal', 'date', 'time'],
-            'wilayah': ['wilayah', 'region', 'daerah', 'lokasi', 'provinsi'],
-            'harga': ['harga', 'price', 'nilai', 'cost']
-        }
-
-        for col in df.columns:
-            col_lower = col.lower()
-            for key, words in keywords.items():
-                if key not in col_mapping:  # Hanya isi jika belum ada
-                    if any(word in col_lower for word in words):
-                        col_mapping[key] = col
-                        break 
-        
-        # Validasi kolom wajib
-        required_cols = ['tanggal', 'wilayah', 'harga']
-        if not all(k in col_mapping for k in required_cols):
-            missing = [k for k in required_cols if k not in col_mapping]
-            print(f"[SKIP] File {file} kekurangan kolom: {missing}. Dilewati.")
+        # Validasi minimal ada kolom 'Wilayah'
+        if 'Wilayah' not in df.columns:
+            print(f"File {file} tidak memiliki kolom 'Wilayah'. Dilewati.")
             continue
 
-        # Rename kolom
-        df = df.rename(columns={col_mapping[k]: k for k in required_cols})
+        # Cleansing baris non-data (misal teks "Sumber Data : ...") di baris bawah
+        df = df.dropna(subset=['Wilayah'])
+        df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data', case=False, na=False)]
         
-        # 3. Ekstrak metadata dari filename
-        basename = os.path.basename(file)
-        match = date_pattern.search(basename)
-        start_date = pd.NaT
-        end_date = pd.NaT
+        # Melt data: Ubah dari Wide format (tanggal sebagai kolom) ke Long format
+        # Ambil semua nama kolom kecuali 'Wilayah' dan kolom-kolom 'Unnamed' (sisa koma di csv)
+        date_columns = [col for col in df.columns if col != 'Wilayah' and not str(col).startswith('Unnamed')]
         
-        if match:
-            try:
-                s_str, e_str = match.groups()
-                start_date = pd.to_datetime(s_str, format='%Y%m%d')
-                end_date = pd.to_datetime(e_str, format='%Y%m%d')
-            except Exception:
-                pass # Biarkan NaT jika parsing gagal
+        df_melted = pd.melt(
+            df, 
+            id_vars=['Wilayah'], 
+            value_vars=date_columns, 
+            var_name='Tanggal', 
+            value_name='Harga'
+        )
 
-        # 4. Konversi Tipe Data & Pembersihan
-        # dayfirst=True penting untuk format DD/MM/YYYY khas Indonesia
-        df['tanggal'] = pd.to_datetime(df['tanggal'], errors='coerce', dayfirst=True)
-        df['harga'] = pd.to_numeric(df['harga'], errors='coerce')
-        df['wilayah'] = df['wilayah'].astype(str).str.strip().str.title() # Title case untuk konsistensi
+        # Konversi tipe data
+        df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
+        df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
+        df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
+
+        # Cleansing: Hapus baris dengan tanggal/harga yang tidak valid, atau harga = 0
+        sebelum = len(df_melted)
+        df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
+        df_melted = df_melted[df_melted['Harga'] > 0]  # Abaikan harga 0
+        setelah = len(df_melted)
         
-        # Drop baris invalid
-        initial_count = len(df)
-        df = df.dropna(subset=['tanggal', 'harga', 'wilayah']) # Wilayah juga harus ada
-        df = df[df['wilayah'].str.lower() != 'nan'] # Hindari string 'nan'
-        
-        dropped_count = initial_count - len(df)
-        if dropped_count > 0:
-            print(f"[CLEAN] File {file}: menghapus {dropped_count} baris invalid.")
+        if setelah < sebelum:
+            print(f"File {os.path.basename(file)}: menghapus {sebelum - setelah} baris data kosong/0.")
 
-        if df.empty:
-            continue
-
-        # 5. Tambahkan Metadata
-        df['source_file'] = basename
-        df['file_start_date'] = start_date
-        df['file_end_date'] = end_date
-
-        all_data.append(df)
+        if not df_melted.empty:
+            all_data.append(df_melted)
 
     if not all_data:
-        raise ValueError("Tidak ada data valid yang berhasil dimuat dari semua file.")
+        raise ValueError("Tidak ada data yang berhasil dimuat. Periksa struktur file data Anda.")
 
-    # 6. Gabungkan dan Hapus Duplikat
+    # Gabungkan semua data dari semua file
     combined_df = pd.concat(all_data, ignore_index=True)
     
-    # Hapus duplikat berdasarkan Tanggal + Wilayah (ambil data terakhir jika ada konflik)
-    before_dup = len(combined_df)
-    combined_df = combined_df.drop_duplicates(subset=['tanggal', 'wilayah'], keep='last')
-    after_dup = len(combined_df)
-    
-    if after_dup < before_dup:
-        print(f"[INFO] Ditemukan {before_dup - after_dup} data duplikat (tanggal+wilayah) dan telah dibersihkan.")
-
-    # Urutkan data agar rapi
-    combined_df = combined_df.sort_values(by=['tanggal', 'wilayah']).reset_index(drop=True)
-
     return combined_df
