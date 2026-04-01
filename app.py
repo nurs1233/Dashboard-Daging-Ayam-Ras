@@ -7,7 +7,6 @@ import os
 from data_loader import load_all_data
 
 # --- SETUP PATH ---
-# Mengambil direktori tempat file app.py berada
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- KONFIGURASI HALAMAN ---
@@ -28,11 +27,11 @@ st.markdown("""
     .main { background-color: #F8FAFC; }
     section[data-testid="stSidebar"] { background-color: #012D1D !important; border-right: 1px solid rgba(255,255,255,0.1); }
     section[data-testid="stSidebar"] .stMarkdown h3 { color: white !important; }
-    .metric-card { background: white; padding: 1.5rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #F1F5F9; }
-    .card-label { font-size: 0.75rem; font-weight: 700; color: var(--neutral); text-transform: uppercase; }
-    .card-value { font-size: 1.6rem; font-weight: 800; color: var(--primary); margin: 0.25rem 0; }
-    .delta-up { color: var(--danger); font-size: 0.75rem; font-weight: 600; }
-    .delta-down { color: var(--success); font-size: 0.75rem; font-weight: 600; }
+    .metric-card { background: white; padding: 1.2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #F1F5F9; }
+    .card-label { font-size: 0.7rem; font-weight: 700; color: var(--neutral); text-transform: uppercase; }
+    .card-value { font-size: 1.5rem; font-weight: 800; color: var(--primary); margin: 0.2rem 0; }
+    .delta-up { color: var(--danger); font-size: 0.7rem; font-weight: 600; }
+    .delta-down { color: var(--success); font-size: 0.7rem; font-weight: 600; }
     .chart-container { background: white; padding: 1.5rem; border-radius: 1rem; border: 1px solid #F1F5F9; margin-bottom: 1.5rem; }
     .pulse { width: 10px; height: 10px; background: #16A34A; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); } 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); } }
@@ -47,36 +46,33 @@ def get_data():
 df_full = get_data()
 
 if df_full.empty:
-    st.error("⚠️ **Data tidak ditemukan atau gagal dimuat.**")
-    st.info(f"Pastikan folder `Data` berisi file CSV statistik harian di lokasi: `{os.path.join(BASE_DIR, 'Data')}`")
-    # Tampilkan struktur folder untuk debug jika perlu
-    if st.checkbox("Lihat Debug Info (Struktur Folder)"):
-        st.write("Current Directory Content:", os.listdir(BASE_DIR))
-        if os.path.exists(os.path.join(BASE_DIR, 'Data')):
-            st.write("Data Directory Content:", os.listdir(os.path.join(BASE_DIR, 'Data')))
+    st.warning("📊 **Mencoba memuat data...**")
+    st.info("Jika data tidak muncul, pastikan folder `Data` berisi file `.xlsx` atau `.csv` yang valid.")
+    
+    with st.expander("🛠️ Panel Debugging"):
+        st.write("**Lokasi Base:**", BASE_DIR)
+        data_path = os.path.join(BASE_DIR, 'Data')
+        if os.path.exists(data_path):
+            st.write("**Isi Folder Data:**", os.listdir(data_path))
+        else:
+            st.error("Folder 'Data' tidak ditemukan!")
     st.stop()
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("""
-    <div style='padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;'>
-        <h3 style='margin:0'>🐔 AGRI-INTEL</h3>
-        <p style='color: #86AF99; font-size: 10px; margin:0; font-weight:700;'>POULTRY MARKET TRACKER</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.subheader("Filter Analisis")
+    st.markdown("<h3 style='margin:0'>🐔 AGRI-INTEL</h3><p style='color: #86AF99; font-size: 10px; font-weight:700;'>MARKET ANALYTICS</p>", unsafe_allow_html=True)
+    st.markdown("---")
     
     max_d = df_full['Tanggal'].max().date()
     min_d = df_full['Tanggal'].min().date()
     
     date_range = st.date_input("Rentang Waktu", value=(max_d - timedelta(days=30), max_d), min_value=min_d, max_value=max_d)
-    threshold = st.slider("Ambang Batas Waspada (Rp)", 25000, 60000, 40000)
+    threshold = st.slider("Batas Waspada (Rp)", 25000, 60000, 40000)
     
     all_regs = sorted(df_full['Wilayah'].unique())
-    selected_regions = st.multiselect("Wilayah Fokus", all_regs, default=['DKI Jakarta', 'Jawa Barat', 'Jawa Timur'] if len(all_regs) > 3 else all_regs)
+    selected_regions = st.multiselect("Wilayah Fokus", all_regs, default=['DKI Jakarta', 'Jawa Barat', 'Jawa Timur'] if 'DKI Jakarta' in all_regs else all_regs[:3])
     
-    if st.button("🔄 Segarkan Database"):
+    if st.button("🔄 Refresh Data"):
         st.cache_data.clear()
         st.rerun()
 
@@ -95,10 +91,10 @@ st.markdown(f"""
 <div style='margin-bottom: 25px;'>
     <div style='display:flex; align-items:center; gap:10px;'>
         <div class='pulse'></div>
-        <span style='color:var(--neutral); font-weight:700; font-size:11px; letter-spacing:1px;'>MONITORING HARGA NASIONAL</span>
+        <span style='color:var(--neutral); font-weight:700; font-size:11px; letter-spacing:1px;'>REAL-TIME TRACKING</span>
     </div>
-    <h1 style='color:var(--primary); font-weight:800; margin:0; font-size:2.2rem;'>Dashboard Daging Ayam Ras</h1>
-    <p style='color:var(--neutral); margin-top:5px; font-size: 0.9rem;'>Analisis tren pasar harian berdasarkan data historis SP2KP.</p>
+    <h1 style='color:var(--primary); font-weight:800; margin:0; font-size:2rem;'>Dashboard Daging Ayam Ras</h1>
+    <p style='color:var(--neutral); margin-top:5px; font-size: 0.85rem;'>Visualisasi harga pangan berdasarkan laporan harian SP2KP.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -106,29 +102,28 @@ st.markdown(f"""
 m1, m2, m3, m4 = st.columns(4)
 latest_date = df['Tanggal'].max()
 df_now = df[df['Tanggal'] == latest_date]
-avg_now = df_now['Harga'].mean()
-avg_prev = df_now['Prev_Harga'].mean()
-delta_pct = ((avg_now - avg_prev) / avg_prev * 100) if (pd.notna(avg_prev) and avg_prev != 0) else 0
 
-with m1:
-    st.markdown(f"<div class='metric-card'><div class='card-label'>Rata-rata Nasional</div><div class='card-value'>Rp {avg_now:,.0f}</div><div class='{'delta-up' if delta_pct > 0 else 'delta-down'}'>{'▲' if delta_pct > 0 else '▼'} {abs(delta_pct):.1f}% vs Kemarin</div></div>", unsafe_allow_html=True)
+if not df_now.empty:
+    avg_now = df_now['Harga'].mean()
+    avg_prev = df_now['Prev_Harga'].mean()
+    delta_pct = ((avg_now - avg_prev) / avg_prev * 100) if (pd.notna(avg_prev) and avg_prev != 0) else 0
 
-with m2:
-    peak = df_now.loc[df_now['Harga'].idxmax()]
-    st.markdown(f"<div class='metric-card'><div class='card-label'>Harga Tertinggi</div><div class='card-value'>Rp {peak['Harga']:,.0f}</div><div style='font-size:11px; color:var(--neutral);'>📍 {peak['Wilayah']}</div></div>", unsafe_allow_html=True)
-
-with m3:
-    st.markdown(f"<div class='metric-card'><div class='card-label'>Status Waspada</div><div class='card-value' style='color:var(--danger)'>{len(df_now[df_now['Status']=='Waspada'])} Wilayah</div><div style='font-size:11px; color:var(--neutral);'>Batas: Rp {threshold:,.0f}</div></div>", unsafe_allow_html=True)
-
-with m4:
-    st.markdown(f"<div class='metric-card'><div class='card-label'>Periode Data</div><div class='card-value' style='font-size:1.2rem'>{min_d.strftime('%b %y')} - {max_d.strftime('%b %y')}</div><div style='font-size:11px; color:var(--neutral);'>{len(df_full):,} Data Poin</div></div>", unsafe_allow_html=True)
+    with m1:
+        st.markdown(f"<div class='metric-card'><div class='card-label'>Rata-rata Nasional</div><div class='card-value'>Rp {avg_now:,.0f}</div><div class='{'delta-up' if delta_pct > 0 else 'delta-down'}'>{'▲' if delta_pct > 0 else '▼'} {abs(delta_pct):.1f}% vs Kemarin</div></div>", unsafe_allow_html=True)
+    with m2:
+        peak = df_now.loc[df_now['Harga'].idxmax()]
+        st.markdown(f"<div class='metric-card'><div class='card-label'>Harga Tertinggi</div><div class='card-value'>Rp {peak['Harga']:,.0f}</div><div style='font-size:11px; color:var(--neutral);'>📍 {peak['Wilayah']}</div></div>", unsafe_allow_html=True)
+    with m3:
+        st.markdown(f"<div class='metric-card'><div class='card-label'>Wilayah Waspada</div><div class='card-value' style='color:var(--danger)'>{len(df_now[df_now['Status']=='Waspada'])} Wilayah</div><div style='font-size:11px; color:var(--neutral);'>Batas: Rp {threshold:,.0f}</div></div>", unsafe_allow_html=True)
+    with m4:
+        st.markdown(f"<div class='metric-card'><div class='card-label'>Cakupan Data</div><div class='card-value' style='font-size:1.1rem'>{len(df_full):,} Poin</div><div style='font-size:11px; color:var(--neutral);'>Update: {latest_date.strftime('%d %b %Y')}</div></div>", unsafe_allow_html=True)
 
 # --- VISUALS ---
 st.markdown("<br>", unsafe_allow_html=True)
 c1, c2 = st.columns([1.7, 1.3])
 
 with c1:
-    st.markdown("<div class='chart-container'><h3>📈 Pergerakan Harga</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='chart-container'><h3>📈 Tren Pergerakan Harga</h3>", unsafe_allow_html=True)
     df_line = df.groupby('Tanggal')['Harga'].mean().reset_index()
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_line['Tanggal'], y=df_line['Harga'], name="Nasional", line=dict(color='#012D1D', width=3)))
@@ -136,23 +131,23 @@ with c1:
         for r in selected_regions:
             rd = df[df['Wilayah']==r]
             fig.add_trace(go.Scatter(x=rd['Tanggal'], y=rd['Harga'], name=r, line=dict(width=1.5), opacity=0.5))
-    fig.update_layout(height=350, margin=dict(l=0,r=0,t=20,b=0), hovermode='x unified', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+    fig.update_layout(height=350, margin=dict(l=0,r=0,t=10,b=0), hovermode='x unified', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 with c2:
-    st.markdown("<div class='chart-container'><h3>🗺️ Sebaran Harga</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='chart-container'><h3>🗺️ Peta Harga Wilayah</h3>", unsafe_allow_html=True)
     df_map = df_now.dropna(subset=['Lat', 'Lon'])
     if not df_map.empty:
-        fig_map = px.scatter_mapbox(df_map, lat="Lat", lon="Lon", color="Harga", size="Harga", hover_name="Wilayah", color_continuous_scale="RdYlGn_r", size_max=15, zoom=3.5, mapbox_style="carto-positron")
+        fig_map = px.scatter_mapbox(df_map, lat="Lat", lon="Lon", color="Harga", size="Harga", hover_name="Wilayah", color_continuous_scale="RdYlGn_r", size_max=15, zoom=3.2, mapbox_style="carto-positron")
         fig_map.update_layout(height=350, margin=dict(l=0,r=0,t=0,b=0))
         st.plotly_chart(fig_map, use_container_width=True)
     else:
-        st.warning("Data koordinat tidak lengkap untuk peta.")
+        st.info("Peta tidak tersedia (Data koordinat tidak cocok).")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # --- TABEL ---
-st.markdown("### 📋 Detail Harga Per Wilayah (Terbaru)")
+st.markdown("### 📋 Detail Harga per Wilayah")
 st.dataframe(
     df_now[['Wilayah', 'Harga', 'Status']].sort_values('Harga', ascending=False).style
     .format({'Harga': 'Rp {:,.0f}'})
@@ -160,4 +155,4 @@ st.dataframe(
     use_container_width=True, hide_index=True
 )
 
-st.markdown("<p style='text-align: center; color: #94A3B8; font-size: 11px; margin-top: 30px;'>Dashboard v2.6 • © 2026 Agrarian Intelligence</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #94A3B8; font-size: 10px; margin-top: 30px;'>Dashboard Pro v2.7 • Agri-Intel Corp</p>", unsafe_allow_html=True)
