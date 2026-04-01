@@ -538,11 +538,11 @@ with tab_spasial:
             st.plotly_chart(fig_corr, use_container_width=True, config={'displayModeBar': False})
             
             # Cari korelasi absolut tertinggi (di luar diagonal)
-            np.fill_diagonal(corr_matrix.values, np.nan)
-            if not corr_matrix.isna().all().all():
-                max_corr_val = corr_matrix.max().max()
-                pair = (corr_matrix == max_corr_val).idxmax()
-                st.markdown(f"""<div class='interpreter-box' style='margin-top:0;'><strong>💡 Interpretasi Otomatis:</strong> Pasangan pasar dengan hubungan terkuat adalah <b>{pair.index[0]}</b> dan <b>{pair[0]}</b> (r = {max_corr_val:.2f}). Kebijakan atau goncangan harga pada salah satu dari dua wilayah ini kemungkinan besar akan tertransmisi secara langsung ke wilayah pasangannya.</div>""", unsafe_allow_html=True)
+            corr_matrix_masked = corr_matrix.where(~np.eye(corr_matrix.shape[0], dtype=bool))
+            if not corr_matrix_masked.isna().all().all():
+                max_corr_val = corr_matrix_masked.max().max()
+                prov_a, prov_b = corr_matrix_masked.stack().idxmax()
+                st.markdown(f"""<div class='interpreter-box' style='margin-top:0;'><strong>💡 Interpretasi Otomatis:</strong> Pasangan pasar dengan hubungan terkuat adalah <b>{prov_a}</b> dan <b>{prov_b}</b> (r = {max_corr_val:.2f}). Kebijakan atau goncangan harga pada salah satu dari dua wilayah ini kemungkinan besar akan tertransmisi secara langsung ke wilayah pasangannya.</div>""", unsafe_allow_html=True)
         else: st.info(f"Pilih setidaknya 2 {compare_mode.split(' ')[1].lower()} untuk menghasilkan matriks korelasi.")
     st.markdown("</div>", unsafe_allow_html=True)
 
