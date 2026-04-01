@@ -30,6 +30,15 @@ header[data-testid="stHeader"] { display: none !important; }
     border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;
     box-shadow: 0 8px 24px rgba(0,0,0,0.2);
 }
+.metric-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.25rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.metric-title { font-size: 11px; color: var(--textsoft); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-weight: 600; }
+.metric-value { font-size: 1.8rem; font-weight: 700; color: var(--text); font-family: 'DM Sans', sans-serif; line-height: 1.2; }
+.metric-sub { font-size: 12px; color: var(--accent); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+.metric-sub.danger { color: #F87171; }
 .live-dot {
     display: inline-block; width: 8px; height: 8px; background: var(--accent);
     border-radius: 50%; animation: livepulse 2s infinite; margin-right: 8px;
@@ -91,7 +100,7 @@ if df_full.empty:
 # ─────────────────────────────────────────────────────────────────────────────
 latest_date = df_full['Tanggal'].max()
 st.markdown(f"""
-    <div style='margin-bottom: 2rem;'>
+    <div style='margin-bottom: 1.5rem;'>
         <div style='font-size:12px; color:#3DD68C; letter-spacing:2px; text-transform:uppercase; font-weight:700;'>
             <span class='live-dot'></span>AgriPulse Market Intelligence
         </div>
@@ -114,6 +123,52 @@ with col2:
     selected_regs = st.multiselect("🌏 Bandingkan Wilayah Utama", all_regions, default=default_regs)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# METRIC CARDS (KOMPARASI INSTAN)
+# ─────────────────────────────────────────────────────────────────────────────
+df_latest = df_full[df_full['Tanggal'] == latest_date]
+if not df_latest.empty:
+    avg_price = df_latest['Harga'].mean()
+    min_row = df_latest.loc[df_latest['Harga'].idxmin()]
+    max_row = df_latest.loc[df_latest['Harga'].idxmax()]
+    disparitas = max_row['Harga'] - min_row['Harga']
+    
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    
+    mc1.markdown(f"""
+        <div class='metric-box'>
+            <div class='metric-title'>Rata-rata Nasional</div>
+            <div class='metric-value'>Rp {avg_price:,.0f}</div>
+            <div class='metric-sub'>Indikator Dasar</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    mc2.markdown(f"""
+        <div class='metric-box'>
+            <div class='metric-title'>Harga Termurah</div>
+            <div class='metric-value'>Rp {min_row['Harga']:,.0f}</div>
+            <div class='metric-sub'>📍 {min_row['Wilayah']}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    mc3.markdown(f"""
+        <div class='metric-box'>
+            <div class='metric-title'>Harga Termahal</div>
+            <div class='metric-value'>Rp {max_row['Harga']:,.0f}</div>
+            <div class='metric-sub danger'>📍 {max_row['Wilayah']}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    mc4.markdown(f"""
+        <div class='metric-box'>
+            <div class='metric-title'>Disparitas (Gap)</div>
+            <div class='metric-value'>Rp {disparitas:,.0f}</div>
+            <div class='metric-sub'>Selisih Termahal & Termurah</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TEMA PLOTLY KUSTOM
 # ─────────────────────────────────────────────────────────────────────────────
 def apply_beautiful_layout(fig, title):
@@ -123,7 +178,6 @@ def apply_beautiful_layout(fig, title):
         font=dict(family='DM Sans', color='#9BAABD'),
         margin=dict(l=20, r=20, t=60, b=20),
         hovermode='x unified',
-        # FIX: Pindahkan legend ke samping kanan (vertikal) agar tidak menekan chart ke bawah
         legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, bgcolor='rgba(0,0,0,0)', font=dict(size=10)),
         xaxis=dict(showgrid=False, gridcolor='#2A3142', zeroline=False),
         yaxis=dict(showgrid=True, gridcolor='#2A3142', zeroline=False, tickformat=",.0f")
@@ -165,48 +219,81 @@ for i, reg in enumerate(selected_regs):
         hovertemplate=f'<b>{reg}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'
     ))
 
-fig1 = apply_beautiful_layout(fig1, "📈 Pergerakan Harga Sepanjang Waktu")
+fig1 = apply_beautiful_layout(fig1, "📈 Pergerakan & Komparasi Harga Sepanjang Waktu")
 
-# Menentukan batas Y-Axis dinamis agar tidak mulai dari 0
 y_min_total = min(y_mins)
 y_max_total = max(y_maxs)
-padding = (y_max_total - y_min_total) * 0.05 # Memberikan ruang kosong 5% di atas dan bawah
+padding = (y_max_total - y_min_total) * 0.05
 if padding == 0: padding = y_min_total * 0.05
 
-# FIX: Berikan tinggi statis dan fokuskan Y-Axis ke data terdekat (zoom in)
-fig1.update_layout(height=550) 
+fig1.update_layout(height=450) 
 fig1.update_yaxes(range=[y_min_total - padding, y_max_total + padding])
 
 st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CHART 2: RANKING HARGA TERKINI (BAR CHART)
+# CHART 2 & 3: TREN DISPARITAS & RANKING HARGA
 # ─────────────────────────────────────────────────────────────────────────────
-st.markdown("<div class='card'>", unsafe_allow_html=True)
+col_chart_left, col_chart_right = st.columns([1, 1])
 
-# Ambil data hari terakhir
-df_latest = df_full[df_full['Tanggal'] == latest_date].sort_values('Harga', ascending=True)
+with col_chart_left:
+    st.markdown("<div class='card' style='height: 100%;'>", unsafe_allow_html=True)
+    
+    # Hitung Disparitas Harian (Max - Min seluruh Indonesia)
+    daily_stats = df_view.groupby('Tanggal')['Harga'].agg(['max', 'min']).reset_index()
+    daily_stats['Disparitas'] = daily_stats['max'] - daily_stats['min']
+    
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(
+        x=daily_stats['Tanggal'], y=daily_stats['Disparitas'],
+        fill='tozeroy', fillcolor='rgba(240, 180, 41, 0.1)',
+        line=dict(color='#F0B429', width=2.5),
+        name='Gap Harga',
+        hovertemplate='<b>%{x|%d %b %Y}</b><br>Disparitas: Rp %{y:,.0f}<extra></extra>'
+    ))
+    
+    fig3 = apply_beautiful_layout(fig3, "📐 Tren Disparitas Nasional")
+    fig3.update_layout(
+        height=400, 
+        showlegend=False,
+        yaxis=dict(title="Selisih Harga (Rp)", tickfont=dict(size=10))
+    )
+    
+    st.plotly_chart(fig3, use_container_width=True, config={'displayModeBar': False})
+    st.markdown("</div>", unsafe_allow_html=True)
 
-fig2 = px.bar(
-    df_latest, x='Harga', y='Wilayah', orientation='h',
-    color='Harga', color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'],
-    text='Harga'
-)
+with col_chart_right:
+    st.markdown("<div class='card' style='height: 100%;'>", unsafe_allow_html=True)
 
-fig2.update_traces(
-    texttemplate='Rp %{text:,.0f}', textposition='outside',
-    hovertemplate='<b>%{y}</b><br>Harga: Rp %{x:,.0f}<extra></extra>',
-    marker_line_width=0
-)
+    # Ambil data hari terakhir, lalu ambil 5 Termurah dan 5 Termahal agar chart bar tetap proporsional
+    df_latest_sorted = df_latest.sort_values('Harga', ascending=True)
+    
+    # Gabungkan Top 5 Termurah dan Top 5 Termahal untuk perbandingan instan
+    if len(df_latest_sorted) > 10:
+        df_top_bottom = pd.concat([df_latest_sorted.head(5), df_latest_sorted.tail(5)])
+    else:
+        df_top_bottom = df_latest_sorted
 
-fig2 = apply_beautiful_layout(fig2, f"📊 Peringkat Harga per Wilayah (Update: {latest_date.strftime('%d %b %Y')})")
-fig2.update_layout(
-    height=max(400, len(df_latest) * 22), # Ketinggian dinamis menyesuaikan jumlah provinsi
-    coloraxis_showscale=False, # Sembunyikan colorbar agar lebih bersih
-    yaxis=dict(title="", tickfont=dict(size=10)),
-    xaxis=dict(title="", showticklabels=False, showgrid=False)
-)
+    fig2 = px.bar(
+        df_top_bottom, x='Harga', y='Wilayah', orientation='h',
+        color='Harga', color_continuous_scale=['#3DD68C', '#F0B429', '#F87171'],
+        text='Harga'
+    )
 
-st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
-st.markdown("</div>", unsafe_allow_html=True)
+    fig2.update_traces(
+        texttemplate='Rp %{text:,.0f}', textposition='outside',
+        hovertemplate='<b>%{y}</b><br>Harga: Rp %{x:,.0f}<extra></extra>',
+        marker_line_width=0
+    )
+
+    fig2 = apply_beautiful_layout(fig2, f"📊 Komparasi 5 Termurah & Termahal")
+    fig2.update_layout(
+        height=400,
+        coloraxis_showscale=False,
+        yaxis=dict(title="", tickfont=dict(size=11)),
+        xaxis=dict(title="", showticklabels=False, showgrid=False)
+    )
+
+    st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+    st.markdown("</div>", unsafe_allow_html=True)
