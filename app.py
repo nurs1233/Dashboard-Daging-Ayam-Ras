@@ -782,10 +782,14 @@ with tab_disparity:
             marker_color='rgba(167,139,250,0.6)',
             hovertemplate='%{x|%d %b %Y}<br>Gini: %{y:.4f}<extra></extra>'), row=2, col=1)
 
-        fig_disp.update_layout(**PLOTLY_BASE, height=380,
-            yaxis=dict(**PLOTLY_BASE['yaxis'], title='Disparitas (Rp)', tickformat=',.0f'),
-            yaxis2=dict(**PLOTLY_BASE['yaxis'], title='Gini Index'),
-            legend=dict(**PLOTLY_BASE['legend']))
+# Buat copy PLOTLY_BASE tanpa key yang akan di-override
+plotly_base_clean = {k: v for k, v in PLOTLY_BASE.items() 
+                     if k not in ('yaxis', 'yaxis2', 'legend')}
+
+fig_disp.update_layout(**plotly_base_clean, height=380,
+    yaxis=dict(**PLOTLY_BASE['yaxis'], title='Disparitas (Rp)', tickformat=',.0f'),
+    yaxis2=dict(**PLOTLY_BASE['yaxis'], title='Gini Index'),
+    legend=dict(**PLOTLY_BASE['legend']))
         fig_disp.update_xaxes(showgrid=False, tickfont=dict(size=9))
 
         st.markdown("<div class='card'>", unsafe_allow_html=True)
