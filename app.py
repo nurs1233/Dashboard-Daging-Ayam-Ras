@@ -327,6 +327,15 @@ KOORDINAT = {
     'Nusa Tenggara Barat':(-8.6529,117.3616),'Nusa Tenggara Timur':(-8.6573,121.0794),
 }
 
+PULAU_MAP = {
+    'Sumatera': ['Aceh', 'Sumatera Utara', 'Sumatera Barat', 'Riau', 'Kepulauan Riau', 'Jambi', 'Sumatera Selatan', 'Bangka Belitung', 'Bengkulu', 'Lampung'],
+    'Jawa': ['Banten', 'DKI Jakarta', 'Jawa Barat', 'Jawa Tengah', 'DI Yogyakarta', 'Jawa Timur'],
+    'Bali & Nusa Tenggara': ['Bali', 'Nusa Tenggara Barat', 'Nusa Tenggara Timur'],
+    'Kalimantan': ['Kalimantan Barat', 'Kalimantan Tengah', 'Kalimantan Selatan', 'Kalimantan Timur', 'Kalimantan Utara'],
+    'Sulawesi': ['Sulawesi Utara', 'Gorontalo', 'Sulawesi Tengah', 'Sulawesi Barat', 'Sulawesi Selatan', 'Sulawesi Tenggara'],
+    'Maluku & Papua': ['Maluku Utara', 'Maluku', 'Papua Barat Daya', 'Papua Barat', 'Papua Tengah', 'Papua', 'Papua Pegunungan', 'Papua Selatan']
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # DATA LOADING
 # ─────────────────────────────────────────────────────────────────────────────
@@ -443,34 +452,53 @@ with st.sidebar:
     all_dates_max = df_full['Tanggal'].max().date()
     default_start = max(all_dates_max - timedelta(days=180), all_dates_min)
 
+    if 'd_start' not in st.session_state: st.session_state.d_start = default_start
+    if 'd_end' not in st.session_state: st.session_state.d_end = all_dates_max
+
+    def set_dates(days):
+        st.session_state.d_start = max(all_dates_max - timedelta(days=days), all_dates_min)
+        st.session_state.d_end = all_dates_max
+        st.session_state.d_picker = (st.session_state.d_start, st.session_state.d_end)
+
     st.markdown("<div style='font-size:10px;color:#6B7A8D;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;'>📅 Rentang Waktu</div>", unsafe_allow_html=True)
-    date_range = st.date_input("", value=(default_start, all_dates_max),
-                               min_value=all_dates_min, max_value=all_dates_max,
-                               label_visibility="collapsed")
+    
+    cd1, cd2, cd3, cd4 = st.columns(4)
+    cd1.button("1B", on_click=set_dates, args=(30,), use_container_width=True)
+    cd2.button("3B", on_click=set_dates, args=(90,), use_container_width=True)
+    cd3.button("6B", on_click=set_dates, args=(180,), use_container_width=True)
+    cd4.button("1T", on_click=set_dates, args=(365,), use_container_width=True)
+
+    if 'd_picker' not in st.session_state:
+        st.session_state.d_picker = (st.session_state.d_start, st.session_state.d_end)
+
+    date_range = st.date_input("", key='d_picker', min_value=all_dates_min, max_value=all_dates_max, label_visibility="collapsed")
 
     st.markdown("<div style='height:1px;background:#2A3142;margin:12px 0;'></div>", unsafe_allow_html=True)
 
     all_regions = sorted(df_full['Wilayah'].unique())
 
-    st.markdown("<div style='font-size:10px;color:#6B7A8D;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;'>🌏 Wilayah</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:10px;color:#6B7A8D;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;'>🌏 Pilih Pulau / Wilayah</div>", unsafe_allow_html=True)
 
-    qcol1, qcol2, qcol3 = st.columns(3)
-    select_all   = qcol1.button("Semua",  use_container_width=True)
-    select_java  = qcol2.button("Jawa",   use_container_width=True)
-    select_clear = qcol3.button("Reset",  use_container_width=True)
+    pulau_opts = ["-- Kustom Wilayah --", "Semua Provinsi", "Pulau Sumatera", "Pulau Jawa", "Pulau Kalimantan", "Pulau Sulawesi", "Bali & Nusa Tenggara", "Maluku & Papua"]
 
-    JAWA = [r for r in all_regions if any(k in r for k in ['Jakarta','Jawa','Banten','Yogyakarta'])]
+    def on_pulau_change():
+        p = st.session_state.pulau_sel
+        if p == "Semua Provinsi": st.session_state.sel_regions = all_regions
+        elif p == "Pulau Sumatera": st.session_state.sel_regions = [r for r in PULAU_MAP['Sumatera'] if r in all_regions]
+        elif p == "Pulau Jawa": st.session_state.sel_regions = [r for r in PULAU_MAP['Jawa'] if r in all_regions]
+        elif p == "Pulau Kalimantan": st.session_state.sel_regions = [r for r in PULAU_MAP['Kalimantan'] if r in all_regions]
+        elif p == "Pulau Sulawesi": st.session_state.sel_regions = [r for r in PULAU_MAP['Sulawesi'] if r in all_regions]
+        elif p == "Bali & Nusa Tenggara": st.session_state.sel_regions = [r for r in PULAU_MAP['Bali & Nusa Tenggara'] if r in all_regions]
+        elif p == "Maluku & Papua": st.session_state.sel_regions = [r for r in PULAU_MAP['Maluku & Papua'] if r in all_regions]
+
+    st.selectbox("Filter Cepat Pulau", pulau_opts, key='pulau_sel', on_change=on_pulau_change, label_visibility="collapsed")
+
     DEFAULT_SEL = [r for r in ['DKI Jakarta','Jawa Barat','Jawa Timur','Sumatera Utara','Sulawesi Selatan'] if r in all_regions] or all_regions[:5]
-
     if 'sel_regions' not in st.session_state:
         st.session_state.sel_regions = DEFAULT_SEL
-    if select_all:   st.session_state.sel_regions = all_regions
-    if select_java:  st.session_state.sel_regions = JAWA
-    if select_clear: st.session_state.sel_regions = DEFAULT_SEL
 
     selected_regions = st.multiselect(
-        "", all_regions, default=st.session_state.sel_regions,
-        label_visibility="collapsed", key="sel_regions")
+        "Provinsi Terpilih", all_regions, key="sel_regions", label_visibility="collapsed")
 
     st.markdown("<div style='height:1px;background:#2A3142;margin:12px 0;'></div>", unsafe_allow_html=True)
 
@@ -505,7 +533,7 @@ if len(date_range) == 2:
     d_start = pd.Timestamp(date_range[0])
     d_end   = pd.Timestamp(date_range[1])
 else:
-    d_start = pd.Timestamp(all_dates_min)
+    d_start = pd.Timestamp(date_range[0])
     d_end   = pd.Timestamp(all_dates_max)
 
 df_view = df_full[(df_full['Tanggal'] >= d_start) & (df_full['Tanggal'] <= d_end)].copy()
@@ -597,13 +625,11 @@ st.markdown("<div style='height:.75rem;'></div>", unsafe_allow_html=True)
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_trend, tab_disparity, tab_map, tab_correlation, tab_season, tab_analysis, tab_data = st.tabs([
+tab_trend, tab_disp_corr, tab_map, tab_analysis, tab_data = st.tabs([
     "📈 Tren Harga",
-    "📐 Disparitas",
+    "📐 Disparitas & Korelasi",
     "🗺️ Peta Sebaran",
-    "🔗 Korelasi",
-    "📅 Musiman & YoY",
-    "🔬 Analisis Lanjutan",
+    "🔬 Analisis Mendalam",
     "📋 Data"
 ])
 
@@ -756,9 +782,9 @@ with tab_trend:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — DISPARITAS
+# TAB 2 — DISPARITAS & KORELASI (PART 1)
 # ══════════════════════════════════════════════════════════════════════════════
-with tab_disparity:
+with tab_disp_corr:
     st.markdown("""
     <div style='font-size:12px;color:#6B7A8D;padding:8px 12px;background:#1C232D;
                 border-left:3px solid #3DD68C;border-radius:4px;margin-bottom:1rem;'>
@@ -967,9 +993,11 @@ with tab_map:
         st.info("Koordinat tidak tersedia untuk data ini.")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — KORELASI
+# TAB 2 — DISPARITAS & KORELASI (PART 2)
 # ══════════════════════════════════════════════════════════════════════════════
-with tab_correlation:
+with tab_disp_corr:
+    st.markdown("<div class='hdiv'></div>", unsafe_allow_html=True)
+    
     pivot = df_full.pivot_table(index='Tanggal', columns='Wilayah', values='Harga', aggfunc='mean')
     pivot_v = pivot[(pivot.index >= d_start) & (pivot.index <= d_end)]
 
@@ -1062,7 +1090,7 @@ with tab_correlation:
         st.info("Data tidak cukup untuk korelasi. Perluas rentang tanggal.")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 5 — ANALISIS LANJUTAN
+# TAB 4 — ANALISIS MENDALAM (PART 1)
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_analysis:
     an1, an2 = st.columns(2)
@@ -1191,9 +1219,11 @@ with tab_analysis:
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 5 (NEW) — MUSIMAN & YOY
+# TAB 4 — ANALISIS MENDALAM (PART 2)
 # ══════════════════════════════════════════════════════════════════════════════
-with tab_season:
+with tab_analysis:
+    st.markdown("<div class='hdiv'></div>", unsafe_allow_html=True)
+    
     s_c1, s_c2 = st.columns([1,1])
 
     with s_c1:
