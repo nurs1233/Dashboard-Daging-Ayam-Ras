@@ -13,82 +13,40 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSS KUSTOM (Meniru Tailwind Design) ---
+# --- CSS KUSTOM ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap');
-    
-    /* Global Typography & Background */
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     h1, h2, h3, h4, h5, h6 { font-family: 'Manrope', sans-serif !important; }
     .stApp { background-color: #F3F4F5; }
-    
-    /* Top Navigation Simulation */
-    .top-nav {
-        background-color: #ffffff;
-        padding: 1rem 2rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid #E1E3E4;
-        margin: -4rem -4rem 2rem -4rem;
-        z-index: 999;
-    }
+    .top-nav { background-color: #ffffff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E1E3E4; margin: -4rem -4rem 2rem -4rem; z-index: 999; }
     .top-nav-brand { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 1.25rem; color: #012D1D; }
-    
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] { 
-        background-color: #012D1D !important; 
-        border-right: none;
-    }
+    section[data-testid="stSidebar"] { background-color: #012D1D !important; border-right: none; }
     section[data-testid="stSidebar"] * { color: #D8F3DC; }
-    section[data-testid="stSidebar"] .stSelectbox label, 
-    section[data-testid="stSidebar"] .stSlider label,
-    section[data-testid="stSidebar"] .stDateInput label {
-        color: #86AF99 !important;
-        font-size: 10px !important;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-    }
-    
-    /* Header Section */
+    section[data-testid="stSidebar"] .stSelectbox label, section[data-testid="stSidebar"] .stSlider label, section[data-testid="stSidebar"] .stDateInput label { color: #86AF99 !important; font-size: 10px !important; text-transform: uppercase; letter-spacing: 0.1em; }
     .header-container { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; }
     .live-badge { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .pulse { width: 8px; height: 8px; background: #16A34A; border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); } 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); } }
     .page-title { font-size: 2.25rem; font-weight: 800; color: #012D1D; margin: 0; line-height: 1.2; }
     .page-subtitle { color: #414844; font-size: 0.9rem; margin-top: 4px; }
-    
-    /* Bento Grid Cards */
-    .bento-card {
-        background-color: #ffffff;
-        border-radius: 0.75rem;
-        padding: 1.5rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        height: 100%;
-        border: 1px solid #E1E3E4;
-    }
-    
-    /* Metric Cards */
+    .bento-card { background-color: #ffffff; border-radius: 0.75rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); height: 100%; border: 1px solid #E1E3E4; }
     .metric-wrapper { display: flex; flex-direction: column; justify-content: space-between; height: 120px; }
     .metric-title { font-size: 10px; font-weight: 700; color: #717973; text-transform: uppercase; letter-spacing: 0.05em; }
     .metric-value-container { display: flex; align-items: baseline; gap: 4px; margin-top: 1rem; }
     .metric-currency { font-size: 0.875rem; font-weight: 700; color: #717973; }
     .metric-value { font-size: 1.875rem; font-weight: 800; color: #012D1D; }
     .metric-sub { font-size: 0.75rem; color: #717973; margin-top: 4px; font-weight: 500;}
-    
     .border-secondary { border-left: 4px solid #8E4E14; }
     .border-success { border-left: 4px solid #16A34A; }
     .border-error { border-left: 4px solid #BA1A1A; }
     .border-primary { border-left: 4px solid #012D1D; }
-    
-    /* Hide Streamlit elements */
     header[data-testid="stHeader"] { display: none; }
     .block-container { padding-top: 4rem; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- FAKE TOP NAV ---
 st.markdown("""
 <div class="top-nav">
     <div class="top-nav-brand">Agrarian Intelligence</div>
@@ -102,7 +60,7 @@ def load_all_data():
     base_search_path = "."
     files = []
     
-    # 1. Cari semua file CSV dan XLSX
+    # 1. Kumpulkan semua file CSV dan XLSX
     for root, dirs, filenames in os.walk(base_search_path):
         if '/.' in root or '\\.' in root or 'venv' in root or '__pycache__' in root:
             continue
@@ -111,71 +69,94 @@ def load_all_data():
                 files.append(os.path.join(root, f))
     
     if not files:
-        raise FileNotFoundError(f"TIDAK ADA file .xlsx atau .csv ditemukan di direktori aplikasi!")
+        raise FileNotFoundError("TIDAK ADA file .xlsx atau .csv ditemukan di direktori aplikasi!")
 
     all_data = []
+    file_errors = [] # Variabel untuk melacak pesan error secara spesifik
+    
     for file in files:
         try:
-            # Baca tanpa header untuk mendeteksi baris tabel yang sebenarnya
+            # Membaca file sebagai raw text array (tanpa asumsi header)
             if file.endswith('.csv'):
-                df_raw = pd.read_csv(file, header=None, dtype=str)
+                df_raw = pd.read_csv(file, header=None, dtype=str, on_bad_lines='skip')
             else:
                 df_raw = pd.read_excel(file, header=None, dtype=str)
                 
-            # Cari baris yang mengandung kata 'Wilayah'
+            # Mencari baris mana yang merupakan Header ("Wilayah")
             header_idx = -1
-            for i, row in df_raw.iterrows():
-                row_str = " ".join([str(val).lower() for val in row.values])
+            for i in range(min(20, len(df_raw))): 
+                row_str = " ".join([str(val).lower() for val in df_raw.iloc[i].values])
                 if 'wilayah' in row_str:
                     header_idx = i
                     break
                     
             if header_idx == -1:
+                file_errors.append(f"{os.path.basename(file)}: Gagal mencari kata 'Wilayah' di 20 baris pertama.")
                 continue
                 
-            # Jadikan baris tersebut sebagai nama kolom
-            df_raw.columns = df_raw.iloc[header_idx]
+            # Tarik nama kolom dari baris yang ditemukan
+            raw_columns = df_raw.iloc[header_idx].astype(str).tolist()
+            
+            # PEMBERSIHAN KOLOM: Menghindari error pandas "Duplicate/NaN columns" akibat sisa koma di CSV
+            cleaned_cols = []
+            for idx, c in enumerate(raw_columns):
+                c_clean = c.strip()
+                # Jika sel di excel/csv kosong, tandai sebagai sampah untuk dibuang
+                if c_clean.lower() == 'nan' or c_clean == '' or c_clean == 'none':
+                    cleaned_cols.append(f"hapus_kolom_{idx}")
+                else:
+                    cleaned_cols.append(c_clean)
+                    
+            df_raw.columns = cleaned_cols
             df = df_raw.iloc[header_idx + 1:].copy()
             
-            # Standarisasi nama kolom Wilayah
-            wilayah_col = [c for c in df.columns if 'wilayah' in str(c).lower()][0]
+            # Buang semua kolom sampah berlebih
+            cols_to_drop = [c for c in df.columns if c.startswith('hapus_kolom_')]
+            df = df.drop(columns=cols_to_drop)
+            
+            # Pastikan nama kolom Wilayah tertulis sempurna
+            wilayah_col = [c for c in df.columns if 'wilayah' in c.lower()][0]
             df = df.rename(columns={wilayah_col: 'Wilayah'})
             
-            # Cleansing baris non-data ("Sumber Data : SP2KP...")
+            # Buang teks "Sumber Data : SP2KP" di baris paling bawah
             df = df.dropna(subset=['Wilayah'])
-            df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data', case=False, na=False)]
+            df = df[~df['Wilayah'].astype(str).str.contains('Sumber Data|Laporan|Periode', case=False, na=False)]
             
-            # Melt data: Wide (tanggal di kolom) -> Long (tanggal jadi baris)
-            date_columns = [col for col in df.columns if col != 'Wilayah' and pd.notna(col) and str(col).strip() != '']
+            # Unpivot Data (Tanggal menjadi satu kolom ke bawah)
+            date_columns = [c for c in df.columns if c != 'Wilayah']
             df_melted = pd.melt(
                 df, id_vars=['Wilayah'], value_vars=date_columns, 
                 var_name='Tanggal', value_name='Harga'
             )
 
-            # Standardisasi Tipe Data
+            # Parsing Tipe Data
             df_melted['Tanggal'] = pd.to_datetime(df_melted['Tanggal'], errors='coerce')
-            
-            # Pembersihan format angka (hanya menyisakan angka)
             df_melted['Harga'] = df_melted['Harga'].astype(str).str.replace(r'[^\d]', '', regex=True)
             df_melted['Harga'] = pd.to_numeric(df_melted['Harga'], errors='coerce')
             df_melted['Wilayah'] = df_melted['Wilayah'].astype(str).str.strip()
 
-            # Buang baris invalid & harga 0
+            # Bersihkan data kosong / Harga 0
             df_melted = df_melted.dropna(subset=['Tanggal', 'Harga'])
             df_melted = df_melted[df_melted['Harga'] > 0]
             
             if not df_melted.empty:
                 all_data.append(df_melted)
+            else:
+                file_errors.append(f"{os.path.basename(file)}: Tersaring habis. Cek apakah ada angka harga valid yang tertulis.")
                 
         except Exception as e:
-            continue
+            file_errors.append(f"{os.path.basename(file)}: ERROR PYTHON -> {str(e)}")
 
     if not all_data:
-        raise ValueError("File ditemukan, tapi tidak ada data yang berhasil dikonversi. Pastikan format tabel sesuai.")
+        # Jika benar-benar kosong, cetak di layar penyebab aslinya (sangat membantu debugging)
+        error_msg = "Gagal memproses data valid dari file CSV/Excel Anda. Log rincian file yang bermasalah:\n"
+        for err in file_errors:
+            error_msg += f"- {err}\n"
+        raise ValueError(error_msg)
 
     combined_df = pd.concat(all_data, ignore_index=True)
     
-    # Injeksi kolom Lat/Lon kosong untuk mencegah error Peta
+    # Pencegah error map/peta
     if 'Lat' not in combined_df.columns:
         combined_df['Lat'] = None
     if 'Lon' not in combined_df.columns:
@@ -187,7 +168,7 @@ def load_all_data():
 try:
     df_full = load_all_data()
 except Exception as e:
-    st.error(f"Terjadi kesalahan saat memuat data: {e}")
+    st.error(e)
     st.stop()
 
 if df_full.empty:
@@ -245,8 +226,6 @@ with col_head1:
         <p class='page-subtitle'>Laporan analisis harga komoditas harian seluruh wilayah Indonesia. Update: {latest_date.strftime('%d %b %Y')}</p>
     </div>
     """, unsafe_allow_html=True)
-with col_head2:
-    st.markdown("<br>", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -262,63 +241,46 @@ if not df_now.empty:
         st.markdown(f"""
         <div class='bento-card border-secondary metric-wrapper'>
             <span class='metric-title'>Rata-rata Harga Nasional</span>
-            <div>
-                <div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{avg_now:,.0f}</span></div>
-            </div>
+            <div><div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{avg_now:,.0f}</span></div></div>
         </div>
         """, unsafe_allow_html=True)
     with m2:
         st.markdown(f"""
         <div class='bento-card border-success metric-wrapper'>
             <span class='metric-title'>Harga Terendah</span>
-            <div>
-                <div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{min_row['Harga']:,.0f}</span></div>
-                <div class='metric-sub'>Wilayah: {min_row['Wilayah']}</div>
-            </div>
+            <div><div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{min_row['Harga']:,.0f}</span></div><div class='metric-sub'>Wilayah: {min_row['Wilayah']}</div></div>
         </div>
         """, unsafe_allow_html=True)
     with m3:
         st.markdown(f"""
         <div class='bento-card border-error metric-wrapper'>
             <span class='metric-title'>Harga Tertinggi</span>
-            <div>
-                <div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{max_row['Harga']:,.0f}</span></div>
-                <div class='metric-sub'>Wilayah: {max_row['Wilayah']}</div>
-            </div>
+            <div><div class='metric-value-container'><span class='metric-currency'>Rp</span><span class='metric-value'>{max_row['Harga']:,.0f}</span></div><div class='metric-sub'>Wilayah: {max_row['Wilayah']}</div></div>
         </div>
         """, unsafe_allow_html=True)
     with m4:
         st.markdown(f"""
         <div class='bento-card border-primary metric-wrapper'>
             <span class='metric-title'>Total Record Data</span>
-            <div>
-                <div class='metric-value-container'><span class='metric-value'>{len(df_full):,}</span><span class='metric-currency'>Entries</span></div>
-                <div class='metric-sub'>Syncing up to date</div>
-            </div>
+            <div><div class='metric-value-container'><span class='metric-value'>{len(df_full):,}</span><span class='metric-currency'>Entries</span></div><div class='metric-sub'>Syncing up to date</div></div>
         </div>
         """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- CHARTS BENTO GRID ---
-# Row 1: Line Chart (8) & Bar Chart (4)
 c1, c2 = st.columns([2, 1])
 
 with c1:
     st.markdown("<div class='bento-card'><h3 style='color: #012D1D; font-size: 1.25rem; margin-bottom: 0;'>📈 Tren Harga Over Time</h3><p style='color: #717973; font-size: 0.85rem; margin-bottom: 1rem;'>Pergerakan harga harian berdasarkan wilayah</p>", unsafe_allow_html=True)
-    
     df_line = df.groupby('Tanggal')['Harga'].mean().reset_index()
     fig1 = go.Figure()
-    # Nasional
     fig1.add_trace(go.Scatter(x=df_line['Tanggal'], y=df_line['Harga'], name="Nasional", line=dict(color='#8E4E14', width=3, dash='dash')))
-    
-    # Wilayah Terpilih
     colors = ['#012D1D', '#16A34A', '#BA1A1A', '#EA9147']
     if selected_regions:
         for i, r in enumerate(selected_regions[:4]):
             rd = df[df['Wilayah']==r]
             fig1.add_trace(go.Scatter(x=rd['Tanggal'], y=rd['Harga'], name=r, line=dict(color=colors[i%len(colors)], width=2.5)))
-            
     fig1.update_layout(height=300, margin=dict(l=0,r=0,t=10,b=0), hovermode='x unified', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
     fig1.update_xaxes(showgrid=False)
     fig1.update_yaxes(gridcolor='#E1E3E4')
@@ -327,8 +289,6 @@ with c1:
 
 with c2:
     st.markdown("<div class='bento-card'><h3 style='color: #012D1D; font-size: 1.25rem; margin-bottom: 1rem;'>📊 Rata-rata per Wilayah</h3>", unsafe_allow_html=True)
-    
-    # Top 5 Regions Data
     top_regions = df_now.sort_values('Harga', ascending=False).head(7)
     fig2 = px.bar(top_regions, x='Harga', y='Wilayah', orientation='h', color='Harga', color_continuous_scale=['#16A34A', '#EAB308', '#BA1A1A'])
     fig2.update_layout(height=320, margin=dict(l=0,r=0,t=0,b=0), coloraxis_showscale=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis={'categoryorder':'total ascending'})
@@ -339,9 +299,7 @@ with c2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Row 2: Map/Heatmap (6) & Box Plot (6)
 c3, c4 = st.columns(2)
-
 with c3:
     st.markdown("<div class='bento-card'><h3 style='color: #012D1D; font-size: 1.25rem; margin-bottom: 1rem;'>🗺️ Peta Distribusi Harga</h3>", unsafe_allow_html=True)
     df_map = df_now.dropna(subset=['Lat', 'Lon'])
@@ -355,8 +313,6 @@ with c3:
 
 with c4:
     st.markdown("<div class='bento-card'><h3 style='color: #012D1D; font-size: 1.25rem; margin-bottom: 1rem;'>🕯️ Distribusi Harga (Box Plot)</h3>", unsafe_allow_html=True)
-    
-    # Box plot untuk region yang difilter (atau 5 region random jika tidak ada filter)
     plot_df = df_filtered if selected_regions else df[df['Wilayah'].isin(df['Wilayah'].unique()[:5])]
     fig_box = px.box(plot_df, x="Harga", y="Wilayah", color="Wilayah", color_discrete_sequence=['#012D1D', '#8E4E14', '#16A34A', '#EA9147', '#BA1A1A'])
     fig_box.update_layout(height=300, margin=dict(l=0,r=0,t=0,b=0), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis={'categoryorder':'median ascending'})
@@ -369,11 +325,8 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 # --- DATA TABLE ---
 st.markdown("<div class='bento-card' style='padding: 0;'><div style='padding: 1.5rem; border-bottom: 1px solid #E1E3E4;'><h3 style='color: #012D1D; font-size: 1.25rem; margin:0;'>📋 Rincian Data Harga Harian</h3><p style='color: #717973; font-size: 0.85rem; margin:0;'>Update terbaru dari Provinsi di Indonesia</p></div>", unsafe_allow_html=True)
-
-# Tampilkan tabel menggunakan styling
 styled_df = df_now[['Tanggal', 'Wilayah', 'Harga', 'Status']].sort_values('Harga', ascending=False)
 styled_df['Tanggal'] = styled_df['Tanggal'].dt.strftime('%d %b %Y')
-
 st.dataframe(
     styled_df.style
     .format({'Harga': 'Rp {:,.0f}'})
