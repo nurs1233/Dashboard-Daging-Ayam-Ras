@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CUSTOM CSS — editorial/dark-intelligence aesthetic
+# CUSTOM CSS
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -55,12 +55,10 @@ h1,h2,h3,h4,h5,h6 {
     color: var(--text) !important;
 }
 
-/* hide streamlit chrome */
 header[data-testid="stHeader"] { display: none !important; }
 .block-container { padding: 1.5rem 2rem !important; }
 footer { display: none !important; }
 
-/* ── Sidebar ── */
 section[data-testid="stSidebar"] {
     background: var(--surface) !important;
     border-right: 1px solid var(--border) !important;
@@ -75,7 +73,6 @@ section[data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
     color: var(--accent) !important;
 }
 
-/* ── Cards ── */
 .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -122,7 +119,6 @@ section[data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
 .card-metric .delta-pos { color: var(--safe); font-weight: 600; }
 .card-metric .delta-neg { color: var(--danger); font-weight: 600; }
 
-/* ── Badges ── */
 .badge {
     display: inline-block; padding: 2px 10px; border-radius: 20px;
     font-size: 11px; font-weight: 600; letter-spacing: .04em;
@@ -132,7 +128,6 @@ section[data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
 .badge-danger { background: rgba(248,113,113,.12); color: var(--danger); border: 1px solid rgba(248,113,113,.3); }
 .badge-info   { background: rgba(96,165,250,.12);  color: var(--chart3); border: 1px solid rgba(96,165,250,.3);  }
 
-/* ── Live pulse ── */
 .live-dot {
     display: inline-block; width: 7px; height: 7px;
     background: var(--accent); border-radius: 50%;
@@ -144,7 +139,6 @@ section[data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
     50%      { opacity:.7; box-shadow: 0 0 0 6px rgba(61,214,140,0); }
 }
 
-/* ── Section headers ── */
 .section-head {
     display: flex; align-items: baseline; gap: 10px;
     margin-bottom: .75rem; padding-bottom: .6rem;
@@ -159,7 +153,6 @@ section[data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
     text-transform: uppercase;
 }
 
-/* ── Streamlit overrides ── */
 .stButton > button {
     background: rgba(61,214,140,.1) !important;
     color: var(--accent) !important;
@@ -197,14 +190,12 @@ div[data-testid="stDataFrame"] {
 }
 .stTabs [data-baseweb="tab-panel"] { padding-top: 1rem !important; }
 
-/* ── Divider ── */
 .hdiv {
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--border), transparent);
     margin: 1.5rem 0;
 }
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -213,18 +204,40 @@ div[data-testid="stDataFrame"] {
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLOTLY THEME DEFAULTS
+# PLOTLY THEME DEFAULTS - FIXED
 # ─────────────────────────────────────────────────────────────────────────────
 PLOTLY_BASE = dict(
-    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)', 
+    plot_bgcolor='rgba(0,0,0,0)',
     font=dict(family='DM Sans', color='#9BAABD', size=11),
     margin=dict(l=10, r=10, t=10, b=10),
-    xaxis=dict(gridcolor='#2A3142', showgrid=False, tickfont=dict(size=9), zeroline=False),
-    yaxis=dict(gridcolor='#2A3142', showgrid=True, tickfont=dict(size=9), zeroline=False),
-    hoverlabel=dict(bgcolor='#1C232D', bordercolor='#2A3142', font_size=12),
-    legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(0,0,0,0)',
-                font=dict(size=10), orientation='h', yanchor='bottom',
-                y=-0.28, xanchor='center', x=.5),
+    xaxis=dict(
+        gridcolor='#2A3142', 
+        showgrid=False, 
+        tickfont=dict(size=9), 
+        zeroline=False
+    ),
+    yaxis=dict(
+        gridcolor='#2A3142', 
+        showgrid=True, 
+        tickfont=dict(size=9), 
+        zeroline=False
+    ),
+    hoverlabel=dict(
+        bgcolor='#1C232D', 
+        bordercolor='#2A3142', 
+        font=dict(size=12)
+    ),
+    legend=dict(
+        bgcolor='rgba(0,0,0,0)', 
+        bordercolor='rgba(0,0,0,0)',
+        font=dict(size=10), 
+        orientation='h', 
+        yanchor='bottom',
+        y=-0.28, 
+        xanchor='center', 
+        x=.5
+    ),
 )
 PALETTE = ['#3DD68C','#F0B429','#60A5FA','#F472B6','#A78BFA','#FB923C','#22D3EE','#FBBF24']
 
@@ -236,18 +249,16 @@ def ema(s, span):    return s.ewm(span=span, min_periods=1).mean()
 
 def bollinger(s, w=20, n=2):
     m = sma(s, w)
-    std = s.rolling(w, min_periods=1).std()
+    std = s.rolling(w, min_periods=1).std().fillna(0)
     return m + std*n, m, m - std*n
 
 def zscore_anomaly(s, w=30, threshold=2.5):
-    """Rolling z-score across full history."""
     mu  = s.rolling(w, min_periods=5).mean()
     sig = s.rolling(w, min_periods=5).std().replace(0, np.nan)
     z   = (s - mu) / sig
     return z.abs() > threshold, z
 
 def disparity_index(s, w=20):
-    """(Price / SMA - 1) * 100  — shows how far price deviates from moving avg."""
     return (s / sma(s, w) - 1) * 100
 
 def rsi(s, w=14):
@@ -312,14 +323,13 @@ KOORDINAT = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DATA LOADING — reads ALL history, no date trimming here
+# DATA LOADING
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_all_data():
     base = "."
     files = []
     for root, dirs, filenames in os.walk(base):
-        # skip hidden/venv/cache dirs
         dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('venv','__pycache__','node_modules')]
         for f in filenames:
             if f.endswith('.csv') or (f.endswith('.xlsx') and not f.startswith('~$')):
@@ -356,7 +366,6 @@ def load_all_data():
                 if df is None:
                     errors.append(f"{os.path.basename(fpath)}: kolom 'Wilayah' tidak ditemukan"); continue
 
-            # normalise
             wcol = next((c for c in df.columns if 'wilayah' in str(c).lower()), None)
             if wcol is None:
                 errors.append(f"{os.path.basename(fpath)}: kolom Wilayah tidak dapat diidentifikasi"); continue
@@ -373,7 +382,7 @@ def load_all_data():
                 melted['Harga'].astype(str).str.replace(r'[^\d.]','',regex=True),
                 errors='coerce')
             melted = melted.dropna(subset=['Tanggal','Harga'])
-            melted = melted[melted['Harga'] > 1000]   # sanity: drop nonsense values
+            melted = melted[melted['Harga'] > 1000]
 
             if not melted.empty:
                 all_data.append(melted)
@@ -387,7 +396,6 @@ def load_all_data():
     combined = combined.drop_duplicates(subset=['Wilayah','Tanggal'])
     combined = combined.sort_values(['Wilayah','Tanggal']).reset_index(drop=True)
 
-    # attach coordinates
     combined['Lat'] = combined['Wilayah'].map(lambda w: KOORDINAT.get(w,(None,None))[0])
     combined['Lon'] = combined['Wilayah'].map(lambda w: KOORDINAT.get(w,(None,None))[1])
 
@@ -426,7 +434,6 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Date range
     all_dates_min = df_full['Tanggal'].min().date()
     all_dates_max = df_full['Tanggal'].max().date()
     default_start = max(all_dates_max - timedelta(days=180), all_dates_min)
@@ -438,12 +445,10 @@ with st.sidebar:
 
     st.markdown("<div style='height:1px;background:#2A3142;margin:12px 0;'></div>", unsafe_allow_html=True)
 
-    # ── Wilayah filter
     all_regions = sorted(df_full['Wilayah'].unique())
 
     st.markdown("<div style='font-size:10px;color:#6B7A8D;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;'>🌏 Wilayah</div>", unsafe_allow_html=True)
 
-    # Quick-select buttons
     qcol1, qcol2, qcol3 = st.columns(3)
     select_all   = qcol1.button("Semua",  use_container_width=True)
     select_java  = qcol2.button("Jawa",   use_container_width=True)
@@ -464,13 +469,11 @@ with st.sidebar:
 
     st.markdown("<div style='height:1px;background:#2A3142;margin:12px 0;'></div>", unsafe_allow_html=True)
 
-    # ── Threshold
     st.markdown("<div style='font-size:10px;color:#6B7A8D;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;'>⚠️ Threshold Waspada (Rp)</div>", unsafe_allow_html=True)
     threshold = st.slider("", 25000, 65000, 40000, 500, label_visibility="collapsed")
 
     st.markdown("<div style='height:1px;background:#2A3142;margin:12px 0;'></div>", unsafe_allow_html=True)
 
-    # ── Indicators
     st.markdown("<div style='font-size:10px;color:#6B7A8D;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;'>📊 Indikator Teknikal</div>", unsafe_allow_html=True)
     show_sma      = st.checkbox("SMA 7 & 20 hari",     value=True)
     show_bb       = st.checkbox("Bollinger Bands",      value=False)
@@ -491,7 +494,7 @@ with st.sidebar:
         st.cache_data.clear(); st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FILTER — display window vs full history
+# FILTER DATA
 # ─────────────────────────────────────────────────────────────────────────────
 if len(date_range) == 2:
     d_start = pd.Timestamp(date_range[0])
@@ -500,18 +503,12 @@ else:
     d_start = pd.Timestamp(all_dates_min)
     d_end   = pd.Timestamp(all_dates_max)
 
-# df_view  = data in selected window (for charts)
-# df_full  = ALL history (for rolling calculations — critical)
 df_view = df_full[(df_full['Tanggal'] >= d_start) & (df_full['Tanggal'] <= d_end)].copy()
-
-# filtered by selected regions
 df_sel = df_view[df_view['Wilayah'].isin(selected_regions)] if selected_regions else df_view.copy()
 
-# latest date snapshot
 latest_date = df_view['Tanggal'].max()
 df_now = df_view[df_view['Tanggal'] == latest_date].copy()
 
-# national daily avg — computed on FULL history for rolling, sliced later
 nat_full = df_full.groupby('Tanggal')['Harga'].mean().sort_index()
 nat_view = nat_full[(nat_full.index >= d_start) & (nat_full.index <= d_end)]
 
@@ -550,7 +547,7 @@ with h2:
 st.markdown("<div class='hdiv'></div>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# METRIC CARDS — computed from df_now AND df_view (not mixed)
+# METRIC CARDS
 # ─────────────────────────────────────────────────────────────────────────────
 if not df_now.empty:
     avg_now  = df_now['Harga'].mean()
@@ -560,13 +557,11 @@ if not df_now.empty:
     n_total  = len(df_now)
     spread   = df_now['Harga'].max() - df_now['Harga'].min()
 
-    # MoM-style: compare to 30 days ago (using full history)
     prev_date = latest_date - timedelta(days=30)
     df_prev   = df_full[df_full['Tanggal'] == df_full['Tanggal'][df_full['Tanggal'] <= prev_date].max()]
     avg_prev  = df_prev['Harga'].mean() if not df_prev.empty else avg_now
     delta_pct = (avg_now - avg_prev) / avg_prev * 100 if avg_prev else 0
 
-    # National CV as volatility proxy
     cv_nat = coeff_of_variation(nat_view) if not nat_view.empty else 0
 
     c1,c2,c3,c4,c5 = st.columns(5)
@@ -610,7 +605,6 @@ tab_trend, tab_disparity, tab_map, tab_correlation, tab_analysis, tab_data = st.
 # TAB 1 — TREN HARGA
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_trend:
-    # ── Comparison mode selector
     c_opt1, c_opt2 = st.columns([3,1])
     with c_opt2:
         compare_mode = st.radio("Mode Tampilan", ["Wilayah Terpilih","Nasional Saja","Semua Wilayah"], index=0, key="cmode")
@@ -625,13 +619,11 @@ with tab_trend:
 
     fig = go.Figure()
 
-    # ── National average (FULL history → then slice)
     sma7_full  = sma(nat_full, 7)
     sma20_full = sma(nat_full, 20)
     bb_u, bb_m, bb_l = bollinger(nat_full)
     anom_mask, z_vals = zscore_anomaly(nat_full, w=30, threshold=z_thr)
 
-    # slice to view window
     nat_v   = nat_full[nat_full.index.isin(nat_view.index)]
     sma7_v  = sma7_full[sma7_full.index.isin(nat_view.index)]
     sma20_v = sma20_full[sma20_full.index.isin(nat_view.index)]
@@ -641,7 +633,6 @@ with tab_trend:
     anom_v  = anom_mask[anom_mask.index.isin(nat_view.index)]
     z_v     = z_vals[z_vals.index.isin(nat_view.index)]
 
-    # Bollinger fill
     if show_bb:
         fig.add_trace(go.Scatter(
             x=list(bb_u_v.index)+list(bb_l_v.index[::-1]),
@@ -654,7 +645,6 @@ with tab_trend:
                 line=dict(color='rgba(240,180,41,0.5)', width=1, dash=dash),
                 hovertemplate=f'{name}: Rp %{{y:,.0f}}<extra></extra>'))
 
-    # Regional lines
     for i, reg in enumerate(regions_to_plot[:8]):
         rd = df_full[df_full['Wilayah']==reg].set_index('Tanggal')['Harga'].sort_index()
         rd_v = rd[(rd.index >= d_start) & (rd.index <= d_end)]
@@ -665,13 +655,11 @@ with tab_trend:
             opacity=0.8,
             hovertemplate=f'<b>{reg}</b><br>%{{x|%d %b %Y}}<br>Rp %{{y:,.0f}}<extra></extra>'))
 
-    # National avg line
     fig.add_trace(go.Scatter(
-        x=nat_v.index, y=nat_v.values, name='🇮🇩 Nasional (Avg)',
+        x=nat_v.index, y=nat_v.values, name='🇮 Nasional (Avg)',
         line=dict(color='#FFFFFF', width=2.2),
         hovertemplate='<b>Nasional</b><br>%{x|%d %b %Y}<br>Rp %{y:,.0f}<extra></extra>'))
 
-    # SMAs
     if show_sma:
         fig.add_trace(go.Scatter(x=sma7_v.index, y=sma7_v.values, name='SMA 7',
             line=dict(color='#60A5FA', width=1.2, dash='dash'),
@@ -680,12 +668,10 @@ with tab_trend:
             line=dict(color='#A78BFA', width=1.2, dash='dot'),
             hovertemplate='SMA 20: Rp %{y:,.0f}<extra></extra>'))
 
-    # Threshold line
     fig.add_hline(y=threshold, line=dict(color='rgba(248,113,113,0.5)', width=1, dash='dash'),
                   annotation_text=f"⚠️ Threshold Rp {threshold:,.0f}",
                   annotation_font_color='#F87171', annotation_font_size=10)
 
-    # Anomaly markers
     if show_anomaly:
         anom_pts = nat_v[anom_v[anom_v.index.isin(nat_v.index)]]
         z_anom   = z_v[anom_v[anom_v.index.isin(nat_v.index)]]
@@ -697,7 +683,6 @@ with tab_trend:
                 customdata=z_anom.values,
                 hovertemplate='<b>ANOMALI</b><br>%{x|%d %b %Y}<br>Rp %{y:,.0f}<br>Z=%{customdata:.2f}<extra></extra>'))
 
-    # Holiday annotations
     if show_holidays:
         for hdate, hname in holidays_in_range(d_start, d_end):
             fig.add_vline(x=hdate, line=dict(color='rgba(96,165,250,0.25)', width=1, dash='dot'))
@@ -705,20 +690,44 @@ with tab_trend:
                 text=hname, showarrow=False, font=dict(size=8, color='rgba(96,165,250,0.7)'),
                 textangle=-90, xanchor='right', bgcolor='rgba(96,165,250,0.08)', borderpad=3)
 
-    fig.update_layout(**PLOTLY_BASE, height=430,
-        xaxis=dict(**PLOTLY_BASE['xaxis'],
+    fig.update_layout(
+        height=430,
+        hovermode='x unified', 
+        dragmode='zoom',
+        paper_bgcolor=PLOTLY_BASE['paper_bgcolor'],
+        plot_bgcolor=PLOTLY_BASE['plot_bgcolor'],
+        font=PLOTLY_BASE['font'],
+        margin=PLOTLY_BASE['margin'],
+        hoverlabel=PLOTLY_BASE['hoverlabel'],
+        legend=PLOTLY_BASE['legend'],
+        xaxis=dict(
+            gridcolor='#2A3142',
+            showgrid=False,
+            tickfont=dict(size=9),
+            zeroline=False,
             rangeslider=dict(visible=True, bgcolor='#161B22', thickness=0.04),
             rangeselector=dict(
-                bgcolor='#1C232D', bordercolor='#2A3142',
+                bgcolor='#1C232D', 
+                bordercolor='#2A3142',
                 font=dict(color='#9BAABD', size=10),
                 buttons=[
-                    dict(count=1,label='1B',step='month',stepmode='backward'),
-                    dict(count=3,label='3B',step='month',stepmode='backward'),
-                    dict(count=6,label='6B',step='month',stepmode='backward'),
-                    dict(step='all',label='Semua')])),
-        yaxis=dict(**PLOTLY_BASE['yaxis'], tickformat=',.0f', title='Harga (Rp)',
-                   title_font=dict(size=10, color='#6B7A8D')),
-        hovermode='x unified', dragmode='zoom')
+                    dict(count=1, label='1B', step='month', stepmode='backward'),
+                    dict(count=3, label='3B', step='month', stepmode='backward'),
+                    dict(count=6, label='6B', step='month', stepmode='backward'),
+                    dict(step='all', label='Semua')
+                ]
+            )
+        ),
+        yaxis=dict(
+            gridcolor='#2A3142',
+            showgrid=True,
+            tickfont=dict(size=9),
+            zeroline=False,
+            tickformat=',.0f', 
+            title='Harga (Rp)',
+            title_font=dict(size=10, color='#6B7A8D')
+        )
+    )
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-head'><h3>Tren Harga Interaktif</h3><span class='tag'>Scroll = zoom · Drag = pan · Double-click = reset</span></div>", unsafe_allow_html=True)
@@ -739,13 +748,11 @@ with tab_disparity:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Daily disparity time series (full history)
     disp_full = df_full.groupby('Tanggal')['Harga'].agg(lambda x: x.max()-x.min()).sort_index()
     disp_view = disp_full[(disp_full.index >= d_start) & (disp_full.index <= d_end)]
     disp_sma  = sma(disp_full, 20)
     disp_sma_v= disp_sma[disp_sma.index.isin(disp_view.index)]
 
-    # Gini-coefficient per day (inequality measure)
     def gini(arr):
         a = np.sort(np.abs(arr))
         n = len(a)
@@ -761,7 +768,6 @@ with tab_disparity:
     with dc1:
         fig_disp = make_subplots(rows=2, cols=1, shared_xaxes=True,
                                  row_heights=[0.65,0.35], vertical_spacing=0.04)
-        # Disparity area
         fig_disp.add_trace(go.Scatter(
             x=disp_view.index, y=disp_view.values, name='Disparitas (Rp)',
             fill='tozeroy', fillcolor='rgba(61,214,140,0.08)',
@@ -771,7 +777,6 @@ with tab_disparity:
             x=disp_sma_v.index, y=disp_sma_v.values, name='SMA 20',
             line=dict(color='#F0B429', width=1.2, dash='dash'),
             hovertemplate='SMA 20: Rp %{y:,.0f}<extra></extra>'), row=1, col=1)
-        # Gini bars
         fig_disp.add_trace(go.Bar(
             x=gini_view.index, y=gini_view.values, name='Gini Harga',
             marker_color='rgba(167,139,250,0.6)',
@@ -789,7 +794,6 @@ with tab_disparity:
         st.markdown("</div>", unsafe_allow_html=True)
 
     with dc2:
-        # Province ranking by disparity contribution (std dev)
         prov_std = df_view.groupby('Wilayah')['Harga'].std().sort_values(ascending=False).head(10)
         fig_std = go.Figure(go.Bar(
             x=prov_std.values, y=prov_std.index, orientation='h',
@@ -807,7 +811,6 @@ with tab_disparity:
         st.plotly_chart(fig_std, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Disparity Index per selected region
     if selected_regions and show_disparity:
         st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
         st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -847,7 +850,6 @@ with tab_map:
         ], key="mapmetric")
         map_style = st.selectbox("Gaya Peta", ["carto-darkmatter","carto-positron","open-street-map"], key="mapstyle")
 
-    # Build map dataframe — one row per province, latest available
     map_data = []
     for prov in df_full['Wilayah'].unique():
         lat, lon = KOORDINAT.get(prov, (None, None))
@@ -861,7 +863,6 @@ with tab_map:
         cv        = coeff_of_variation(series_v)
         z         = (harga_now - nat_view.mean()) / nat_view.std() if nat_view.std() != 0 else 0
 
-        # 30-day trend
         if len(series_v) >= 5:
             old_val = series_v.iloc[max(0, len(series_v)-31)]
             trend30 = (harga_now - old_val) / old_val * 100
@@ -917,7 +918,6 @@ with tab_map:
             st.plotly_chart(fig_map, use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # Summary table next to map
         with map_col2:
             st.markdown("<div class='card' style='margin-top:.5rem;'>", unsafe_allow_html=True)
             st.markdown("<div class='section-head'><h3>Ringkasan Provinsi</h3></div>", unsafe_allow_html=True)
@@ -937,13 +937,11 @@ with tab_map:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_correlation:
     pivot = df_full.pivot_table(index='Tanggal', columns='Wilayah', values='Harga', aggfunc='mean')
-    # use full history for correlation
     pivot_v = pivot[(pivot.index >= d_start) & (pivot.index <= d_end)]
 
     if pivot_v.shape[1] >= 2 and not pivot_v.empty:
         corr = pivot_v.corr(method='pearson')
 
-        # top 20 provinces by data completeness
         completeness = pivot_v.notna().sum().sort_values(ascending=False)
         top_provs = completeness.head(20).index.tolist()
         corr_sub  = corr.loc[top_provs, top_provs]
@@ -972,7 +970,6 @@ with tab_correlation:
             st.markdown("</div>", unsafe_allow_html=True)
 
         with corr_col2:
-            # flatten upper triangle
             pairs = [(corr_sub.index[i], corr_sub.columns[j], corr_sub.iloc[i,j])
                      for i in range(len(corr_sub)) for j in range(i+1,len(corr_sub.columns))]
             pairs_df = pd.DataFrame(pairs, columns=['Prov A','Prov B','r'])
@@ -997,7 +994,6 @@ with tab_correlation:
                     <span style='color:#F87171;font-family:"JetBrains Mono",monospace;'>{row['r']:.3f}</span>
                 </div>""", unsafe_allow_html=True)
 
-            # Correlation with national avg
             st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
             st.markdown("<div class='section-head'><h3>Korelasi vs Nasional</h3></div>", unsafe_allow_html=True)
             nat_corr = {}
@@ -1027,7 +1023,6 @@ with tab_correlation:
 with tab_analysis:
     an1, an2 = st.columns(2)
 
-    # ── RSI
     with an1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.markdown("<div class='section-head'><h3>RSI — Relative Strength Index</h3><span class='tag'>Overbought >70 · Oversold <30</span></div>", unsafe_allow_html=True)
@@ -1054,7 +1049,6 @@ with tab_analysis:
         st.plotly_chart(fig_rsi, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Price distribution histogram
     with an2:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.markdown("<div class='section-head'><h3>Distribusi Harga (Histogram)</h3><span class='tag'>Periode terpilih</span></div>", unsafe_allow_html=True)
@@ -1083,7 +1077,6 @@ with tab_analysis:
         st.plotly_chart(fig_hist, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Monthly heatmap
     st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-head'><h3>Heatmap Bulanan — Rata-rata Harga Nasional</h3><span class='tag'>Baris = tahun, Kolom = bulan</span></div>", unsafe_allow_html=True)
@@ -1115,7 +1108,6 @@ with tab_analysis:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Anomaly detail table
     if show_anomaly:
         st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
         st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -1126,7 +1118,6 @@ with tab_analysis:
             s = df_full[df_full['Wilayah']==prov].set_index('Tanggal')['Harga'].sort_index()
             if len(s) < 10: continue
             mask, zs = zscore_anomaly(s, w=30, threshold=z_thr)
-            # get latest z-score value
             s_v = s[(s.index >= d_start) & (s.index <= d_end)]
             if s_v.empty: continue
             latest_z = zs.reindex(s_v.index).iloc[-1] if not zs.reindex(s_v.index).empty else 0
@@ -1162,7 +1153,6 @@ with tab_data:
     with d_c3:
         show_all_dates = st.checkbox("Tampilkan semua tanggal", value=False)
 
-    # build display data
     if show_all_dates:
         tbl_data = df_view.copy()
     else:
